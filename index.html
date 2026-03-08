@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockNote</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:#0a0c0f; --bg2:#0f1318; --bg3:#141820; --panel:#161b24;
+  --border:#1e2630; --border2:#252d3a;
+  --accent:#00d4aa; --accent2:#0099ff; --red:#ff4d6a;
+  --green:#00d4aa; --yellow:#f5c842;
+  --text:#e2e8f0; --text2:#8892a4; --text3:#4a5568;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Hiragino Sans','Meiryo',sans-serif;min-height:100vh;display:flex;flex-direction:column;}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+
+/* HEADER */
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;height:54px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
+.logo{display:flex;align-items:center;gap:8px;font-family:monospace;font-size:18px;font-weight:700;color:var(--accent);flex-shrink:0;}
+.logo-dot{width:8px;height:8px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+nav{display:flex;gap:4px;flex:1;overflow:hidden;}
+.nav-btn{background:none;border:none;color:var(--text2);font-size:13px;padding:6px 10px;border-radius:6px;cursor:pointer;transition:.15s;font-family:inherit;white-space:nowrap;}
+.nav-btn:hover{background:var(--border);color:var(--text);}
+.nav-btn.active{background:rgba(0,212,170,.12);color:var(--accent);}
+.header-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+/* SEARCH */
+.search-wrap{position:relative;display:flex;align-items:center;}
+.search-input{background:var(--panel);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-size:14px;padding:10px 36px 10px 14px;width:100%;font-family:inherit;transition:.15s;outline:none;box-sizing:border-box;}
+.search-input:focus{border-color:var(--accent2);}
+.search-input::placeholder{color:var(--text3);}
+.search-clear{position:absolute;right:10px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:2px;}
+.search-clear:hover{color:var(--text);}
+.search-result-bar{background:rgba(0,153,255,.08);border:1px solid rgba(0,153,255,.2);border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--accent2);display:flex;align-items:center;justify-content:space-between;}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--panel);border:1px solid var(--accent);color:var(--accent);border-radius:10px;padding:10px 20px;font-size:13px;opacity:0;transition:.3s;z-index:999;pointer-events:none;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+/* LINKS PAGE */
+.link-add-box{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px;}
+.link-add-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.link-add-row input{flex:1;min-width:140px;}
+.link-add-btn{background:var(--accent);color:#000;border:none;border-radius:8px;padding:8px 18px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap;}
+.link-add-btn:hover{background:#00efc0;}
+.link-list{display:flex;flex-direction:column;gap:10px;}
+.link-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;transition:.15s;}
+.link-card:hover{border-color:var(--border2);}
+.link-favicon{width:20px;height:20px;border-radius:4px;flex-shrink:0;object-fit:contain;}
+.link-info{flex:1;min-width:0;}
+.link-title{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:.15s;}
+.link-title:hover{color:var(--accent2);}
+.link-url{font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;font-family:monospace;}
+.link-del-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:4px 6px;border-radius:5px;transition:.15s;flex-shrink:0;}
+.link-del-btn:hover{background:rgba(255,77,106,.15);color:var(--red);}
+.link-open-btn{background:rgba(0,153,255,.1);border:1px solid rgba(0,153,255,.3);color:var(--accent2);font-size:11px;padding:4px 10px;border-radius:5px;cursor:pointer;text-decoration:none;white-space:nowrap;flex-shrink:0;}
+.link-open-btn:hover{background:rgba(0,153,255,.2);}
+/* EMPTY */
+.empty{text-align:center;padding:60px 20px;color:var(--text3);}
+.empty-icon{font-size:48px;display:block;margin-bottom:12px;}
+/* LAYOUT */
+.app{display:flex;flex:1;}
+.sidebar{width:280px;min-width:280px;background:var(--bg2);border-right:1px solid var(--border);padding:16px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;}
+.main{flex:1;overflow-y:auto;}
+.page{display:none;max-width:780px;margin:0 auto;padding:24px 20px;}
+.page.active{display:block;}
+
+/* COMPOSE */
+.compose-box{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px;}
+.compose-label{font-family:monospace;font-size:11px;color:var(--text3);letter-spacing:1.5px;margin-bottom:10px;}
+textarea{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:14px;padding:12px;resize:vertical;outline:none;line-height:1.7;min-height:80px;transition:.15s;}
+textarea:focus{border-color:var(--accent);}
+.compose-row{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;}
+input[type=text],input[type=number],.text-input{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:monospace;font-size:12px;padding:6px 10px;outline:none;transition:.15s;}
+input:focus{border-color:var(--accent2);}
+.type-btns{display:flex;gap:4px;}
+.type-btn{background:none;border:1px solid var(--border2);border-radius:5px;color:var(--text3);font-size:11px;padding:5px 10px;cursor:pointer;transition:.15s;font-family:monospace;}
+.type-btn:hover{border-color:var(--border);color:var(--text2);}
+.type-btn.active{background:rgba(0,212,170,.12);border-color:var(--accent);color:var(--accent);}
+.post-btn{background:var(--accent);color:#000;border:none;border-radius:8px;padding:8px 20px;font-weight:700;font-size:13px;cursor:pointer;transition:.15s;margin-left:auto;font-family:inherit;}
+.post-btn:hover{background:#00efc0;transform:translateY(-1px);}
+.cat-toggle{background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;padding:4px 0;text-align:left;font-family:inherit;}
+.cat-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.cat-chip{background:var(--bg3);border:1px solid var(--border2);border-radius:14px;padding:4px 10px;font-size:11px;color:var(--text3);cursor:pointer;transition:.15s;}
+.cat-chip:hover{border-color:var(--yellow);color:var(--yellow);}
+.cat-chip.active{border-color:var(--yellow);color:var(--yellow);background:rgba(245,200,66,.1);}
+.price-inputs{margin-top:10px;}
+.price-inputs-label{color:var(--text3);font-size:11px;margin-bottom:6px;}
+.price-inputs-row{display:flex;flex-wrap:wrap;gap:8px;}
+.price-entry{display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:4px 10px;}
+.price-entry-ticker{font-family:monospace;font-size:11px;color:var(--accent2);}
+.price-entry-name{font-size:10px;color:var(--text3);}
+.price-entry input{background:none;border:none;color:var(--text);font-family:monospace;font-size:12px;width:75px;outline:none;}
+.price-entry-yen{font-size:11px;color:var(--text3);}
+
+/* FILTER */
+.filter-bar{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+.filter-chip{background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:5px 14px;font-size:12px;color:var(--text2);cursor:pointer;transition:.15s;font-family:monospace;}
+.filter-chip:hover,.filter-chip.active{border-color:var(--accent);color:var(--accent);background:rgba(0,212,170,.08);}
+.tag-filter-bar{background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.3);border-radius:8px;padding:7px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;}
+.tag-filter-bar span{color:var(--yellow);font-size:12px;}
+.tag-filter-bar button{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;}
+
+/* MEMO CARD */
+.memo-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;animation:slideIn .2s ease;}
+@keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.memo-card:hover{border-color:var(--border2);}
+.memo-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.memo-type{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:4px;}
+.memo-type.NEWS{background:rgba(0,153,255,.15);color:var(--accent2);}
+.memo-type.BUY{background:rgba(0,212,170,.15);color:var(--green);}
+.memo-type.SELL{background:rgba(255,77,106,.15);color:var(--red);}
+.memo-type.MEMO{background:rgba(245,200,66,.12);color:var(--yellow);}
+.memo-type.SCHEDULE{background:rgba(160,100,255,.15);color:#b47fff;}
+.memo-time{font-family:monospace;font-size:11px;color:var(--text3);}
+.ticker-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;}
+.ticker-tag{display:flex;align-items:center;gap:4px;background:rgba(0,153,255,.1);border-radius:5px;padding:3px 8px;cursor:pointer;transition:.15s;}
+.ticker-tag:hover{background:rgba(0,153,255,.22);}
+.ticker-tag-code{font-family:monospace;font-size:11px;font-weight:700;color:var(--accent2);}
+.ticker-tag-name{font-size:10px;color:var(--text2);}
+.memo-body{font-size:14px;line-height:1.75;color:var(--text);white-space:pre-wrap;word-break:break-word;}
+.memo-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
+.memo-tag{background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.3);border-radius:12px;padding:2px 9px;font-size:11px;color:var(--yellow);cursor:pointer;transition:.15s;}
+.memo-tag:hover{background:rgba(245,200,66,.2);}
+.price-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.price-badge{display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.3);border:1px solid var(--border2);border-radius:6px;padding:3px 10px;}
+.price-badge-ticker{font-family:monospace;font-size:10px;color:var(--text3);}
+.price-badge-val{font-family:monospace;font-size:12px;font-weight:700;color:var(--yellow);}
+.price-badge-yen{font-size:10px;color:var(--text3);}
+.memo-actions{display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+.action-btn{background:none;border:none;font-size:12px;cursor:pointer;padding:3px 8px;border-radius:5px;transition:.15s;font-family:inherit;}
+.action-btn:hover{background:var(--bg3);}
+.action-btn.reply{color:var(--accent2);}
+.action-btn.edit{color:var(--text2);}
+.action-btn.del{color:var(--red);}
+
+/* THREAD */
+.thread{margin-top:10px;border-left:2px solid var(--border2);padding-left:14px;display:flex;flex-direction:column;gap:8px;}
+.reply-card{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;}
+.reply-meta{display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;}
+
+/* REPLY COMPOSE */
+.reply-compose{display:none;margin-top:10px;border-left:2px solid var(--accent2);padding-left:12px;}
+.reply-compose.open{display:block;}
+.reply-compose textarea{min-height:56px;font-size:13px;}
+.reply-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:8px;}
+.cancel-btn{background:none;border:1px solid var(--border2);border-radius:6px;color:var(--text2);padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit;}
+.reply-post-btn{background:rgba(0,153,255,.2);border:1px solid var(--accent2);color:var(--accent2);border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+
+/* TICKER CARDS GRID */
+.ticker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-top:16px;}
+.ticker-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:.15s;position:relative;overflow:hidden;}
+.ticker-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent2);transform:scaleX(0);transition:.2s;}
+.ticker-card:hover{border-color:var(--accent2);transform:translateY(-2px);}
+.ticker-card:hover::before{transform:scaleX(1);}
+.ticker-card-code{font-family:monospace;font-size:17px;font-weight:700;color:var(--accent2);}
+.ticker-card-name{font-size:11px;color:var(--text2);margin-top:2px;}
+.ticker-card-count{font-size:11px;color:var(--text3);margin-top:4px;}
+.ticker-badges{display:flex;gap:4px;margin-top:6px;}
+.ticker-badge{border:1px solid;border-radius:4px;padding:1px 6px;font-size:9px;}
+.ticker-badge.buy{border-color:var(--green);color:var(--green);}
+.ticker-badge.sell{border-color:var(--red);color:var(--red);}
+
+/* SECTION TITLE */
+.section-title{font-family:monospace;font-size:11px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+
+/* OVERLAY */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:flex-start;justify-content:center;padding:40px 16px;backdrop-filter:blur(4px);}
+.overlay.open{display:flex;animation:fadeIn .2s ease;}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.overlay-panel{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:640px;max-height:82vh;overflow-y:auto;animation:slideUp .25s ease;}
+@keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+.overlay-header{display:flex;align-items:flex-start;padding:20px 20px 14px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2);z-index:1;}
+.overlay-title{font-family:monospace;font-size:20px;font-weight:700;color:var(--accent2);}
+.overlay-sub-name{font-size:12px;color:var(--text2);margin-top:2px;}
+.overlay-count{font-size:12px;color:var(--text3);margin-left:10px;align-self:center;}
+.close-btn{margin-left:auto;background:var(--bg3);border:1px solid var(--border);color:var(--text2);width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.close-btn:hover{background:var(--border);color:var(--text);}
+.overlay-body{padding:16px 20px;}
+
+/* CHART */
+.chart-wrap{margin:10px 0 4px;}
+.chart-title{font-size:10px;color:var(--text3);margin-bottom:4px;}
+svg.price-chart{width:100%;overflow:visible;}
+.chart-legend{display:flex;gap:12px;margin-top:4px;}
+.chart-legend-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3);}
+.chart-legend-dot{width:8px;height:8px;border-radius:50%;}
+
+/* CALENDAR */
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.cal-nav-btn{background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);width:36px;height:36px;font-size:20px;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center;}
+.cal-nav-btn:hover{background:var(--border);}
+.cal-month{font-size:20px;font-weight:700;color:var(--text);}
+.cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;}
+.cal-weekday{text-align:center;font-size:11px;font-weight:600;color:var(--text3);padding:4px 0;}
+.cal-weekday.sun{color:var(--red);}
+.cal-weekday.sat{color:var(--accent2);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.cal-day{background:var(--panel);border:1px solid var(--border);border-radius:8px;min-height:64px;padding:6px;cursor:default;transition:.15s;position:relative;}
+.cal-day.has-memo{cursor:pointer;}
+.cal-day.has-memo:hover{border-color:var(--accent);transform:translateY(-1px);}
+.cal-day.today{background:var(--accent);border-color:var(--accent);}
+.cal-day.today .cal-day-num{color:#000;font-weight:700;}
+.cal-day.empty{background:transparent;border-color:transparent;}
+.cal-day-num{font-size:13px;color:var(--text);font-weight:500;}
+.cal-day.sun .cal-day-num{color:var(--red);}
+.cal-day.sat .cal-day-num{color:var(--accent2);}
+.cal-day.today .cal-day-num,.cal-day.today.sun .cal-day-num,.cal-day.today.sat .cal-day-num{color:#000;}
+.cal-dots{display:flex;gap:2px;margin-top:3px;flex-wrap:wrap;}
+.cal-dot{width:6px;height:6px;border-radius:50%;}
+.cal-count{font-size:9px;color:var(--text3);margin-top:2px;}
+.cal-legend{display:flex;gap:14px;margin-top:14px;justify-content:center;}
+.cal-legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);}
+
+/* DAY MODAL */
+.day-modal-title{font-size:17px;font-weight:700;color:var(--text);}
+
+/* TAGS PAGE */
+.tag-section-title{font-size:12px;color:var(--text2);margin-bottom:8px;margin-top:4px;}
+.tag-cards{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;}
+.tag-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;transition:.15s;text-align:center;}
+.tag-card:hover,.tag-card.active{border-color:var(--yellow);background:rgba(245,200,66,.08);}
+.tag-card-text{font-size:13px;font-weight:600;color:var(--text2);}
+.tag-card.active .tag-card-text{color:var(--yellow);}
+.tag-card-count{font-size:10px;color:var(--text3);margin-top:2px;}
+
+/* EDIT MODAL */
+.edit-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:300;align-items:center;justify-content:center;padding:20px;}
+.edit-modal-overlay.open{display:flex;animation:fadeIn .2s;}
+.edit-modal{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;}
+.edit-modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);}
+.edit-modal-title{font-size:15px;font-weight:700;color:var(--text);}
+.edit-modal-body{padding:20px;}
+.edit-label{font-family:monospace;font-size:11px;color:var(--text3);letter-spacing:1px;margin-bottom:5px;margin-top:12px;display:block;}
+.edit-label:first-child{margin-top:0;}
+.save-btn{background:var(--accent);color:#000;border:none;border-radius:10px;padding:12px 0;font-weight:700;font-size:14px;cursor:pointer;width:100%;margin-top:16px;font-family:inherit;transition:.15s;}
+.save-btn:hover{background:#00efc0;}
+
+/* IMAGE */
+.img-upload-btn{background:var(--bg3);border:1px dashed var(--border2);border-radius:6px;color:var(--text3);font-size:12px;padding:5px 12px;cursor:pointer;transition:.15s;font-family:inherit;}
+.img-upload-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+.img-preview-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.img-preview-wrap{position:relative;display:inline-block;}
+.img-preview{width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border2);}
+.img-preview-remove{position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;}
+.memo-images{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.memo-img{width:120px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--border2);cursor:pointer;transition:.15s;}
+.memo-img:hover{transform:scale(1.04);border-color:var(--accent2);}
+.uploading-badge{font-size:11px;color:var(--yellow);margin-top:4px;}
+/* LIGHTBOX */
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:500;align-items:center;justify-content:center;}
+.lightbox.open{display:flex;}
+.lightbox img{max-width:90vw;max-height:88vh;border-radius:8px;object-fit:contain;}
+.lightbox-close{position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;}
+
+/* ===== RESPONSIVE (スマホ対応) ===== */
+@media (max-width: 600px) {
+  /* ヘッダー：ロゴ＋同期ステータスのみ、navは非表示 */
+  header { padding: 0 12px; height: 50px; }
+  header nav { display: none; }
+  .header-right { margin-left: auto; }
+  #sync-status { font-size: 10px; }
+
+  /* ボトムナビ */
+  .bottom-nav {
+    display: flex !important;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--bg2); border-top: 1px solid var(--border);
+    z-index: 200; height: 56px;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .bottom-nav-btn {
+    flex: 1; background: none; border: none;
+    color: var(--text3); font-size: 9px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 2px; padding: 6px 2px;
+    transition: .15s; font-family: inherit;
+  }
+  .bottom-nav-btn .bn-icon { font-size: 18px; line-height: 1; }
+  .bottom-nav-btn.active { color: var(--accent); }
+  .bottom-nav-btn:active { background: rgba(255,255,255,.05); }
+
+  /* メインコンテンツ：ボトムナビ分の余白 */
+  .main { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
+
+  /* ページ */
+  .page { padding: 12px; }
+
+  /* 投稿フォーム */
+  .compose-box { padding: 12px; }
+  .compose-textarea { font-size: 15px; min-height: 80px; }
+  .type-btns { flex-wrap: wrap; }
+  .type-btn { font-size: 11px; padding: 5px 8px; }
+  .post-btn { padding: 8px 16px; }
+
+  /* カード */
+  .memo-card { padding: 12px; border-radius: 10px; }
+  .memo-body { font-size: 14px; }
+  .memo-actions { gap: 6px; }
+  .action-btn { font-size: 11px; padding: 5px 8px; }
+
+  /* オーバーレイ */
+  .overlay { align-items: flex-end; padding: 0; }
+  .overlay-panel {
+    max-width: 100%; width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 90vh;
+  }
+  .overlay-body { padding: 12px 14px; }
+
+  /* 編集モーダル */
+  .edit-overlay { align-items: flex-end; padding: 0; }
+  .edit-modal {
+    max-width: 100%; width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 92vh;
+  }
+
+  /* カレンダー */
+  .cal-day { min-height: 44px; padding: 3px; }
+  .cal-day-num { font-size: 11px; }
+  .cal-dot { width: 5px; height: 5px; }
+
+  /* 銘柄リスト */
+  .ticker-grid { grid-template-columns: 1fr 1fr; }
+
+  /* 検索バー */
+  .search-input { font-size: 14px; }
+
+  /* 日付ピッカーモーダル */
+  #schedule-picker-overlay > div { min-width: unset; width: 92vw; }
+}
+
+/* ボトムナビはデスクトップでは非表示 */
+.bottom-nav { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-dot"></div>StockNote</div>
+  <nav>
+    <button class="nav-btn active" onclick="showPage('feed',this)">フィード</button>
+    <button class="nav-btn" onclick="showPage('calendar',this)">カレンダー</button>
+    <button class="nav-btn" onclick="showPage('tickers',this)">銘柄リスト</button>
+    <button class="nav-btn" onclick="showPage('tags',this)">タグ</button>
+    <button class="nav-btn" onclick="showPage('links',this)">🔗 リンク</button>
+  </nav>
+  <div class="header-right">
+    <span id="sync-status" style="font-size:11px;color:var(--text3);"></span>
+  </div>
+</header>
+
+<!-- BOTTOM NAV (スマホ用) -->
+<nav class="bottom-nav">
+  <button class="bottom-nav-btn active" onclick="showPage('feed',this);syncBottomNav('feed')">
+    <span class="bn-icon">📋</span>フィード
+  </button>
+  <button class="bottom-nav-btn" onclick="showPage('calendar',this);syncBottomNav('calendar')">
+    <span class="bn-icon">📅</span>カレンダー
+  </button>
+  <button class="bottom-nav-btn" onclick="showPage('tickers',this);syncBottomNav('tickers')">
+    <span class="bn-icon">📈</span>銘柄
+  </button>
+  <button class="bottom-nav-btn" onclick="showPage('tags',this);syncBottomNav('tags')">
+    <span class="bn-icon">#</span>タグ
+  </button>
+  <button class="bottom-nav-btn" onclick="showPage('links',this);syncBottomNav('links')">
+    <span class="bn-icon">🔗</span>リンク
+  </button>
+</nav>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<div class="app">
+  <div class="main">
+
+    <!-- FEED -->
+    <div id="page-feed" class="page active">
+      <div class="search-wrap" style="margin-bottom:12px;">
+        <input type="text" id="search-input" class="search-input" placeholder="🔍 メモを検索..." oninput="onSearch(this.value)" onkeydown="if(event.key==='Escape'){clearSearch();}">
+        <button class="search-clear" id="search-clear" onclick="clearSearch()" style="display:none">✕</button>
+      </div>
+      <div class="compose-box">
+        <div class="compose-label">// NEW MEMO</div>
+        <textarea id="compose-text" placeholder="株式ニュース、売買記録、分析メモなど...&#10;#タグ で自由タグ付け可能" rows="3"></textarea>
+        <div class="compose-row">
+          <input type="text" id="compose-tickers" placeholder="$7203,$9984..." style="width:130px;" oninput="updatePriceInputs()" title="銘柄コード">
+          <div class="type-btns" id="type-btns">
+            <button class="type-btn active" onclick="setType(this,'MEMO')">MEMO</button>
+            <button class="type-btn" onclick="setType(this,'NEWS')">NEWS</button>
+            <button class="type-btn" onclick="setType(this,'BUY')">BUY</button>
+            <button class="type-btn" onclick="setType(this,'SELL')">SELL</button>
+            <button class="type-btn" onclick="setType(this,'SCHEDULE')" style="border-color:#6a3fa0;color:#b47fff;">📅 予定</button>
+          </div>
+          <button class="post-btn" onclick="postMemo()">投稿</button>
+        </div>
+        <button class="cat-toggle" onclick="toggleCatRow()" id="cat-toggle-btn">📂 カテゴリを選択 ▼</button>
+        <div class="cat-row" id="cat-row" style="display:none;">
+          <button class="cat-chip" onclick="toggleCat(this,'決算')">決算</button>
+          <button class="cat-chip" onclick="toggleCat(this,'材料')">材料</button>
+          <button class="cat-chip" onclick="toggleCat(this,'マクロ')">マクロ</button>
+          <button class="cat-chip" onclick="toggleCat(this,'テクニカル')">テクニカル</button>
+          <button class="cat-chip" onclick="toggleCat(this,'配当')">配当</button>
+          <button class="cat-chip" onclick="toggleCat(this,'IPO')">IPO</button>
+          <button class="cat-chip" onclick="toggleCat(this,'その他')">その他</button>
+          <button class="cat-chip" onclick="toggleCat(this,'プライベート')">プライベート</button>
+        </div>
+        <!-- 予定入力欄 -->
+        <div id="schedule-date-row" style="display:none;margin-top:8px;gap:6px;flex-direction:column;" class="compose-row">
+          <input type="text" id="compose-schedule-title" class="text-input" placeholder="📅 タイトル（例：決算発表）" style="width:100%;box-sizing:border-box;border-color:#6a3fa0;color:#b47fff;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="text" id="compose-schedule-date" class="text-input" placeholder="予定日を選択" readonly
+              style="width:160px;cursor:pointer;background:var(--bg3);" onclick="openScheduleDatePicker()">
+            <button onclick="openScheduleDatePicker()" style="background:rgba(106,63,160,.2);border:1px solid #6a3fa0;color:#b47fff;border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;">📅 カレンダーで選ぶ</button>
+            <button onclick="document.getElementById('compose-schedule-date').value='';document.getElementById('compose-schedule-date-hidden').value='';" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;">✕ クリア</button>
+          </div>
+          <input type="hidden" id="compose-schedule-date-hidden">
+        </div>
+        <!-- 日付ピッカーモーダル -->
+        <div id="schedule-picker-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:center;justify-content:center;" onclick="if(event.target===this)closeScheduleDatePicker()">
+          <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:20px;min-width:300px;max-width:340px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+              <button onclick="scheduleDatePickerMove(-1)" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:7px;width:32px;height:32px;cursor:pointer;font-size:16px;">‹</button>
+              <span id="sched-picker-title" style="font-weight:700;color:var(--text);font-size:14px;"></span>
+              <button onclick="scheduleDatePickerMove(1)" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:7px;width:32px;height:32px;cursor:pointer;font-size:16px;">›</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;margin-bottom:8px;">
+              <div style="font-size:10px;color:var(--red);padding:4px;">日</div>
+              <div style="font-size:10px;color:var(--text3);padding:4px;">月</div>
+              <div style="font-size:10px;color:var(--text3);padding:4px;">火</div>
+              <div style="font-size:10px;color:var(--text3);padding:4px;">水</div>
+              <div style="font-size:10px;color:var(--text3);padding:4px;">木</div>
+              <div style="font-size:10px;color:var(--text3);padding:4px;">金</div>
+              <div style="font-size:10px;color:#6af;padding:4px;">土</div>
+            </div>
+            <div id="sched-picker-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;"></div>
+            <div style="margin-top:14px;text-align:right;">
+              <button onclick="closeScheduleDatePicker()" style="background:none;border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:6px 16px;font-size:13px;cursor:pointer;">閉じる</button>
+            </div>
+          </div>
+        </div>
+        <!-- 画像添付 -->
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+          <button class="img-upload-btn" onclick="document.getElementById('compose-img-input').click()">🖼 画像を添付</button>
+          <input type="file" id="compose-img-input" accept="image/*" multiple capture="environment" style="display:none" onchange="previewImages(event)">
+          <span id="compose-uploading" class="uploading-badge" style="display:none">⏳ アップロード中...</span>
+        </div>
+        <div class="img-preview-row" id="compose-img-previews"></div>
+        <div class="price-inputs" id="price-inputs" style="display:none;">
+          <div class="price-inputs-label">📌 株価メモ（任意）</div>
+          <div class="price-inputs-row" id="price-inputs-row"></div>
+        </div>
+      </div>
+
+      <div class="filter-bar" id="filter-bar">
+        <div class="filter-chip active" onclick="setFilter(this,'ALL')">ALL</div>
+        <div class="filter-chip" onclick="setFilter(this,'NEWS')">NEWS</div>
+        <div class="filter-chip" onclick="setFilter(this,'BUY')">BUY</div>
+        <div class="filter-chip" onclick="setFilter(this,'SELL')">SELL</div>
+        <div class="filter-chip" onclick="setFilter(this,'MEMO')">MEMO</div>
+        <div class="filter-chip" onclick="setFilter(this,'SCHEDULE')" style="color:#b47fff;">📅 予定</div>
+      </div>
+      <div id="tag-filter-active" style="display:none;" class="tag-filter-bar">
+        <span id="tag-filter-label"></span>
+        <button onclick="clearTagFilter()">✕</button>
+      </div>
+      <div id="memo-list"></div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div id="page-calendar" class="page">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="calPrev()">‹</button>
+        <span class="cal-month" id="cal-month-title"></span>
+        <button class="cal-nav-btn" onclick="calNext()">›</button>
+      </div>
+      <div class="cal-weekdays">
+        <div class="cal-weekday sun">日</div>
+        <div class="cal-weekday">月</div>
+        <div class="cal-weekday">火</div>
+        <div class="cal-weekday">水</div>
+        <div class="cal-weekday">木</div>
+        <div class="cal-weekday">金</div>
+        <div class="cal-weekday sat">土</div>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="cal-legend">
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--green)"></div>BUY</div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--red)"></div>SELL</div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--accent2)"></div>NEWS</div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--yellow)"></div>MEMO</div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#b47fff"></div>予定</div>
+      </div>
+    </div>
+
+    <!-- TICKERS -->
+    <div id="page-tickers" class="page">
+      <div class="section-title">// WATCHLIST — 登場銘柄</div>
+      <div class="ticker-grid" id="ticker-grid"></div>
+    </div>
+
+    <!-- TAGS -->
+    <div id="page-tags" class="page">
+      <div class="section-title">// TAGS & CATEGORIES</div>
+      <div class="tag-section-title">📂 固定カテゴリ</div>
+      <div class="tag-cards" id="tag-cards-fixed"></div>
+      <div class="tag-section-title">🏷 自由タグ</div>
+      <div class="tag-cards" id="tag-cards-free"></div>
+    </div>
+
+    <!-- LINKS -->
+    <div id="page-links" class="page">
+      <div class="section-title">// LINKS — よく使うサイト</div>
+      <div class="link-add-box">
+        <div class="compose-label">// リンクを追加</div>
+        <div class="link-add-row">
+          <input type="text" id="link-title-input" placeholder="サイト名" style="width:160px;">
+          <input type="text" id="link-url-input" placeholder="https://..." style="flex:1;">
+          <button class="link-add-btn" onclick="addLink()">＋ 追加</button>
+        </div>
+      </div>
+      <div class="link-list" id="link-list"></div>
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);">
+        <div class="compose-label">// 銘柄DB</div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <span id="ticker-db-status" style="font-size:12px;color:var(--text3);"></span>
+          <button class="link-add-btn" onclick="reloadTickerDB()" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border2);">📥 JPX銘柄DBを更新</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;">
+          <a href="https://www.jpx.co.jp/markets/statistics-equities/misc/tvdivq0000001vg2-att/data_j.xls" target="_blank" style="color:var(--accent2);">JPXから data_j.xls をダウンロード</a>してからボタンを押してください。
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- TICKER OVERLAY -->
+<div class="overlay" id="ticker-overlay" onclick="overlayBgClose(event,'ticker-overlay')">
+  <div class="overlay-panel">
+    <div class="overlay-header">
+      <div>
+        <div class="overlay-title" id="ov-ticker-code"></div>
+        <div class="overlay-sub-name" id="ov-ticker-name"></div>
+      </div>
+      <span class="overlay-count" id="ov-ticker-count"></span>
+      <button class="close-btn" onclick="closeOverlay('ticker-overlay')">✕</button>
+    </div>
+    <div class="overlay-body">
+      <div id="ov-yahoo-chart" style="margin-bottom:12px;"></div>
+      <div id="ov-chart"></div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">
+      <div id="ov-memo-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DAY OVERLAY -->
+<div class="overlay" id="day-overlay" onclick="overlayBgClose(event,'day-overlay')">
+  <div class="overlay-panel">
+    <div class="overlay-header">
+      <div class="day-modal-title" id="ov-day-title"></div>
+      <span class="overlay-count" id="ov-day-count"></span>
+      <button class="close-btn" onclick="closeOverlay('day-overlay')">✕</button>
+    </div>
+    <div class="overlay-body">
+      <!-- 投稿フォーム -->
+      <div class="compose-box" style="margin-bottom:16px;">
+        <div class="compose-label">// この日にメモを追加</div>
+        <textarea id="day-compose-text" class="compose-textarea" placeholder="メモを入力... #タグ" rows="3"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="day-compose-tickers" class="text-input" placeholder="$銘柄コード" style="width:140px;">
+          <div id="day-type-btns" style="display:flex;gap:4px;">
+            <button class="type-btn MEMO active" onclick="setDayType(this,'MEMO')">MEMO</button>
+            <button class="type-btn NEWS" onclick="setDayType(this,'NEWS')">NEWS</button>
+            <button class="type-btn BUY" onclick="setDayType(this,'BUY')">BUY</button>
+            <button class="type-btn SELL" onclick="setDayType(this,'SELL')">SELL</button>
+            <button class="type-btn" onclick="setDayType(this,'SCHEDULE')" style="border-color:#6a3fa0;color:#b47fff;">📅 予定</button>
+          </div>
+          <button class="post-btn" style="margin-left:auto" onclick="postDayMemo()">投稿</button>
+        </div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin-bottom:16px;">
+      <div id="ov-day-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="edit-modal-overlay" id="edit-overlay" onclick="editOverlayBgClose(event)">
+  <div class="edit-modal">
+    <div class="edit-modal-header">
+      <div class="edit-modal-title">✏️ メモを編集</div>
+      <button class="close-btn" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="edit-modal-body">
+      <label class="edit-label">内容</label>
+      <textarea id="edit-text" style="min-height:100px;"></textarea>
+
+      <label class="edit-label">銘柄コード</label>
+      <input type="text" id="edit-tickers" class="text-input" style="width:100%;margin-bottom:10px;" oninput="updateEditPriceInputs()" placeholder="$7203,$9984...">
+
+      <label class="edit-label">種別</label>
+      <div class="type-btns" id="edit-type-btns" style="margin-bottom:12px;">
+        <button class="type-btn" onclick="setEditType(this,'MEMO')">MEMO</button>
+        <button class="type-btn" onclick="setEditType(this,'NEWS')">NEWS</button>
+        <button class="type-btn" onclick="setEditType(this,'BUY')">BUY</button>
+        <button class="type-btn" onclick="setEditType(this,'SELL')">SELL</button>
+      </div>
+
+      <label class="edit-label">カテゴリ</label>
+      <div class="cat-row" id="edit-cat-row" style="display:flex;margin-bottom:12px;">
+        <button class="cat-chip" onclick="toggleEditCat(this,'決算')">決算</button>
+        <button class="cat-chip" onclick="toggleEditCat(this,'材料')">材料</button>
+        <button class="cat-chip" onclick="toggleEditCat(this,'マクロ')">マクロ</button>
+        <button class="cat-chip" onclick="toggleEditCat(this,'テクニカル')">テクニカル</button>
+        <button class="cat-chip" onclick="toggleEditCat(this,'配当')">配当</button>
+        <button class="cat-chip" onclick="toggleEditCat(this,'IPO')">IPO</button>
+        <button class="cat-chip" onclick="toggleEditCat(this,'その他')">その他</button>
+        <button class="cat-chip" onclick="toggleEditCat(this,'プライベート')">プライベート</button>
+      </div>
+
+      <label class="edit-label">株価メモ</label>
+      <div class="price-inputs-row" id="edit-price-inputs-row" style="margin-bottom:4px;"></div>
+
+      <button class="save-btn" onclick="saveEdit()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 銘柄名DB =====
+// JPX公式データから動的ロード + フォールバック用固定辞書
+let TICKER_NAMES = {
+  // フォールバック（主要銘柄）
+  '7203':'トヨタ自動車','9984':'ソフトバンクグループ','6758':'ソニーグループ',
+  '9983':'ファーストリテイリング','8035':'東京エレクトロン','6861':'キーエンス',
+  '8306':'三菱UFJフィナンシャル・グループ','8316':'三井住友フィナンシャルグループ',
+  '6920':'レーザーテック','7974':'任天堂','4063':'信越化学工業',
+  '9432':'日本電信電話(NTT)','9433':'KDDI','9434':'ソフトバンク',
+};
+
+function updateTickerDBStatus(count, ts) {
+  const el = document.getElementById('ticker-db-status');
+  if (!el) return;
+  if (count === 0) {
+    el.textContent = '銘柄DBなし（下記から更新してください）';
+    el.style.color = 'var(--yellow)';
+  } else {
+    const date = ts ? new Date(ts).toLocaleDateString('ja-JP') : '';
+    el.textContent = `✅ ${count.toLocaleString()}件 （${date}時点）`;
+    el.style.color = 'var(--accent)';
+  }
+}
+
+async function loadJPXTickers() {
+  try {
+    const cache = localStorage.getItem('sn_tickers_cache');
+    if (cache) {
+      const { data, ts } = JSON.parse(cache);
+      if (Date.now() - ts < 30 * 24 * 60 * 60 * 1000) {
+        TICKER_NAMES = { ...TICKER_NAMES, ...data };
+        updateTickerDBStatus(Object.keys(data).length, ts);
+        return;
+      }
+    }
+  } catch {}
+  updateTickerDBStatus(0, null);
+}
+
+function reloadTickerDB() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.xls,.xlsx';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const statusEl = document.getElementById('ticker-db-status');
+    if (statusEl) { statusEl.textContent = '読み込み中...'; statusEl.style.color = 'var(--yellow)'; }
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    const data = {};
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row[1] || !row[2]) continue;
+      const code = String(row[1]).padStart(4, '0');
+      data[code] = String(row[2]);
+    }
+    TICKER_NAMES = { ...TICKER_NAMES, ...data };
+    const ts = Date.now();
+    localStorage.setItem('sn_tickers_cache', JSON.stringify({ data, ts }));
+    updateTickerDBStatus(Object.keys(data).length, ts);
+    showToast(`📊 銘柄DB更新完了：${Object.keys(data).length.toLocaleString()}件`);
+    renderFeed(); renderTickers();
+  };
+  input.click();
+}
+
+const getTickerName = c => TICKER_NAMES[c] || null;
+
+// ===== DATA =====
+const STORAGE_KEY = 'sn_memos_v4';
+const CATEGORIES = ['決算','材料','マクロ','テクニカル','配当','IPO','その他','プライベート'];
+let memos = [];
+let currentFilter = 'ALL';
+let currentTagFilter = null;
+let currentType = 'MEMO';
+let selectedCats = [];
+let editingId = null;
+let editType = 'MEMO';
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(memos)); }
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
+function parseTickers(str) { return str.split(',').map(s=>s.trim().replace(/^\$/,'').toUpperCase()).filter(Boolean); }
+function parseTags(str) { return (str.match(/#[\w\u3000-\u9fff]+/g)||[]).map(t=>t.slice(1)); }
+function formatTime(ts) {
+  const diff = Math.floor((Date.now()-ts)/1000);
+  if(diff<60) return `${diff}秒前`;
+  if(diff<3600) return `${Math.floor(diff/60)}分前`;
+  if(diff<86400) return `${Math.floor(diff/3600)}時間前`;
+  const d=new Date(ts);
+  return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function formatPrice(n) { return Number(n).toLocaleString('ja-JP'); }
+function toDateKey(ts) {
+  const d=new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ===== SUPABASE =====
+const SB_URL = 'https://cfvdhwzrztjmnzwkprty.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmdmRod3pyenRqbW56d2twcnR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyNjc3ODIsImV4cCI6MjA4Nzg0Mzc4Mn0.1WRGR108a4GzlPT_TT7Sjk4SjHSTy49Uddm0f9N5tQo';
+const SB_HEADERS = { 'Content-Type':'application/json', 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` };
+const ROW_ID = 'stocknote_main';
+let syncStatus = 'idle'; // idle | syncing | ok | error
+
+function setSyncStatus(s, msg) {
+  syncStatus = s;
+  const el = document.getElementById('sync-status');
+  if(!el) return;
+  const map = { idle:'', syncing:'⏳ 同期中...', ok:'☁️ 同期済み', error:'⚠️ オフライン（ローカル保存）' };
+  el.textContent = map[s] || '';
+  el.style.color = s==='ok' ? 'var(--accent)' : s==='error' ? 'var(--yellow)' : 'var(--text3)';
+}
+
+async function saveToSupabase() {
+  setSyncStatus('syncing');
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/memos?id=eq.${ROW_ID}`, {
+      method: 'GET', headers: SB_HEADERS
+    });
+    const existing = await res.json();
+    const method = existing.length > 0 ? 'PATCH' : 'POST';
+    const url = existing.length > 0
+      ? `${SB_URL}/rest/v1/memos?id=eq.${ROW_ID}`
+      : `${SB_URL}/rest/v1/memos`;
+    await fetch(url, {
+      method, headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ id: ROW_ID, data: memos, updated_at: new Date().toISOString() })
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(memos));
+    setSyncStatus('ok');
+  } catch(e) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(memos));
+    setSyncStatus('error');
+  }
+}
+
+async function loadFromSupabase() {
+  setSyncStatus('syncing');
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/memos?id=eq.${ROW_ID}`, { headers: SB_HEADERS });
+    const rows = await res.json();
+    if(rows.length > 0 && Array.isArray(rows[0].data)) {
+      memos = rows[0].data;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(memos));
+    } else {
+      // テーブルは繋がっているがデータなし→ローカルかサンプルを使う
+      const raw = localStorage.getItem(STORAGE_KEY);
+      memos = raw ? JSON.parse(raw) : getSampleMemos();
+    }
+    setSyncStatus('ok');
+    return true;
+  } catch(e) {
+    setSyncStatus('error');
+    return false;
+  }
+}
+
+function save() { saveToSupabase(); }
+
+// ===== INIT =====
+async function init() {
+  setSyncStatus('syncing');
+  await Promise.all([loadFromSupabase(), loadLinks(), loadJPXTickers()]);
+  renderFeed(); renderTickers(); renderTags(); renderCalendar();
+}
+
+function getSampleMemos() {
+  const now = Date.now();
+  return [
+    { id:genId(), text:'日経平均が3万9000円台を回復。半導体セクター主導で上昇。TSMC好決算が追い風。 #マクロ #半導体', tickers:['6723','6504'], type:'NEWS', prices:{'6723':2840,'6504':7320}, tags:['マクロ','半導体'], categories:['マクロ','材料'], ts:now-3600000, replies:[{id:genId(),text:'ルネサスも連動して上昇中。明日オープニングで確認したい。',tickers:['6723'],ts:now-3500000}] },
+    { id:genId(), text:'トヨタ 100株 購入。PER的にも割安水準。長期保有目的。 #バリュー', tickers:['7203'], type:'BUY', prices:{'7203':2650}, tags:['バリュー'], categories:['その他'], ts:now-86400000, replies:[] },
+    { id:genId(), text:'ソフトバンクグループ 50株 利確。AI関連の上昇で十分な利益。 #利確', tickers:['9984'], type:'SELL', prices:{'9984':8200}, tags:['利確'], categories:['材料'], ts:now-172800000, replies:[] },
+    { id:genId(), text:'NVIDIAの決算発表。EPS予想大幅超え。データセンター需要が引き続き好調。 #決算 #AI', tickers:['NVDA'], type:'NEWS', prices:{'NVDA':87500}, tags:['決算','AI'], categories:['決算'], ts:now-259200000, replies:[] },
+  ];
+}
+
+// ===== COMPOSE =====
+function setType(btn, t) {
+  currentType = t;
+  document.querySelectorAll('#type-btns .type-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const schedRow = document.getElementById('schedule-date-row');
+  if (schedRow) schedRow.style.display = t === 'SCHEDULE' ? 'flex' : 'none';
+}
+function toggleCatRow() {
+  const row = document.getElementById('cat-row');
+  const btn = document.getElementById('cat-toggle-btn');
+  const open = row.style.display === 'none';
+  row.style.display = open ? 'flex' : 'none';
+  btn.textContent = `📂 ${selectedCats.length>0?selectedCats.join(', '):'カテゴリを選択'} ${open?'▲':'▼'}`;
+}
+function toggleCat(btn, cat) {
+  if(selectedCats.includes(cat)) { selectedCats=selectedCats.filter(c=>c!==cat); btn.classList.remove('active'); }
+  else { selectedCats.push(cat); btn.classList.add('active'); }
+  const togBtn = document.getElementById('cat-toggle-btn');
+  togBtn.textContent = `📂 ${selectedCats.length>0?selectedCats.join(', '):'カテゴリを選択'} ▲`;
+}
+function updatePriceInputs() {
+  const raw = document.getElementById('compose-tickers').value;
+  const tickers = parseTickers(raw);
+  const wrap = document.getElementById('price-inputs');
+  const row = document.getElementById('price-inputs-row');
+  if(!tickers.length) { wrap.style.display='none'; return; }
+  wrap.style.display = 'block';
+  const existing = {};
+  row.querySelectorAll('.price-entry').forEach(el => {
+    const t = el.dataset.ticker, v = el.querySelector('input').value;
+    if(t&&v) existing[t]=v;
+  });
+  row.innerHTML = tickers.map(t => {
+    const name = getTickerName(t);
+    return `<div class="price-entry" data-ticker="${t}">
+      <span class="price-entry-ticker">$${t}</span>
+      ${name?`<span class="price-entry-name">${esc(name)}</span>`:''}
+      <input type="number" placeholder="0" min="0" step="0.01" value="${existing[t]||''}">
+      <span class="price-entry-yen">円</span>
+    </div>`;
+  }).join('');
+}
+function getPrices(rowId) {
+  const prices = {};
+  document.querySelectorAll(`#${rowId} .price-entry`).forEach(el => {
+    const t=el.dataset.ticker, v=parseFloat(el.querySelector('input').value);
+    if(t&&!isNaN(v)&&v>0) prices[t]=v;
+  });
+  return prices;
+}
+async function postMemo() {
+  const text = document.getElementById('compose-text').value.trim();
+  if(!text) return;
+  const tickers = parseTickers(document.getElementById('compose-tickers').value);
+  const prices = getPrices('price-inputs-row');
+
+  // 予定の日付処理
+  let ts = Date.now();
+  let scheduleTitle = '';
+  if (currentType === 'SCHEDULE') {
+    const dateVal = document.getElementById('compose-schedule-date-hidden').value;
+    scheduleTitle = document.getElementById('compose-schedule-title').value.trim();
+    if (dateVal) {
+      const [y, m, d] = dateVal.split('-').map(Number);
+      ts = new Date(y, m - 1, d, 12, 0, 0).getTime();
+    }
+  }
+
+  // 画像アップロード
+  let imageUrls = [];
+  if(pendingImages.length > 0) {
+    document.getElementById('compose-uploading').style.display = 'inline';
+    imageUrls = await uploadImagesToSupabase(pendingImages);
+    document.getElementById('compose-uploading').style.display = 'none';
+  }
+
+  const memo = { id:genId(), text, tickers, type:currentType, prices, tags:parseTags(text), categories:[...selectedCats], images:imageUrls, ts, replies:[], ...(scheduleTitle ? {scheduleTitle} : {}) };
+  memos.unshift(memo);
+  memos.sort((a,b)=>b.ts-a.ts);
+  save();
+  document.getElementById('compose-text').value='';
+  document.getElementById('compose-tickers').value='';
+  document.getElementById('price-inputs').style.display='none';
+  document.getElementById('price-inputs-row').innerHTML='';
+  document.getElementById('schedule-date-row').style.display='none';
+  document.getElementById('compose-schedule-date').value='';
+  document.getElementById('compose-schedule-date-hidden').value='';
+  document.getElementById('compose-schedule-title').value='';
+  selectedCats=[];
+  pendingImages=[];
+  document.getElementById('compose-img-previews').innerHTML='';
+  document.querySelectorAll('#cat-row .cat-chip').forEach(b=>b.classList.remove('active'));
+  document.getElementById('cat-toggle-btn').textContent='📂 カテゴリを選択 ▼';
+  renderFeed(); renderTickers(); renderTags(); renderCalendar();
+}
+
+// ===== FILTER =====
+function setFilter(el, val) {
+  currentFilter = val;
+  document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderFeed();
+}
+function setTagFilter(tag) {
+  currentTagFilter = currentTagFilter===tag ? null : tag;
+  const bar = document.getElementById('tag-filter-active');
+  if(currentTagFilter) {
+    bar.style.display='flex';
+    document.getElementById('tag-filter-label').textContent=`#${currentTagFilter} でフィルター中`;
+  } else { bar.style.display='none'; }
+  renderFeed(); renderTags();
+  showPage('feed', document.querySelector('.nav-btn'));
+}
+function clearTagFilter() { setTagFilter(null); }
+
+// ===== RENDER FEED =====
+function renderFeed() {
+  const list = document.getElementById('memo-list');
+  let filtered = currentFilter==='ALL' ? [...memos] : memos.filter(m=>m.type===currentFilter);
+  if(currentTagFilter) filtered = filtered.filter(m=>(m.tags||[]).includes(currentTagFilter)||(m.categories||[]).includes(currentTagFilter));
+  if(searchQuery) {
+    const q = searchQuery.toLowerCase();
+    filtered = filtered.filter(m =>
+      m.text.toLowerCase().includes(q) ||
+      (m.tickers||[]).some(t=>t.toLowerCase().includes(q)) ||
+      (m.tags||[]).some(t=>t.toLowerCase().includes(q)) ||
+      (m.categories||[]).some(t=>t.toLowerCase().includes(q)) ||
+      (m.replies||[]).some(r=>r.text.toLowerCase().includes(q))
+    );
+  }
+  const searchBar = searchQuery
+    ? `<div class="search-result-bar"><span>🔍 「${esc(searchQuery)}」の検索結果：${filtered.length}件</span><button onclick="clearSearch()" style="background:none;border:none;color:var(--accent2);cursor:pointer;font-size:12px;">✕ クリア</button></div>`
+    : '';
+  if(!filtered.length) {
+    list.innerHTML = searchBar + '<div class="empty"><span class="empty-icon">📋</span>' + (searchQuery ? '検索結果がありません' : 'まだメモがありません') + '</div>';
+    return;
+  }
+  list.innerHTML = searchBar + filtered.map(m=>renderCard(m)).join('');
+  filtered.forEach(m => { if ((m.images||[]).length > 0) loadCardImages(m.id, m.images); });
+}
+
+function renderCard(m, pfx='') {
+  const tc = {NEWS:'rgba(0,153,255,.15)|#0099ff',BUY:'rgba(0,212,170,.15)|#00d4aa',SELL:'rgba(255,77,106,.15)|#ff4d6a',MEMO:'rgba(245,200,66,.12)|#f5c842',SCHEDULE:'rgba(160,100,255,.15)|#b47fff'}[m.type]||'rgba(245,200,66,.12)|#f5c842';
+  const [tcBg,tcFg] = tc.split('|');
+  const tickerHtml = (m.tickers||[]).map(t=>{
+    const n=getTickerName(t);
+    return `<span class="ticker-tag" onclick="openTicker('${esc(t)}')">${'<span class="ticker-tag-code">$'+esc(t)+'</span>'}${n?`<span class="ticker-tag-name">${esc(n)}</span>`:''}</span>`;
+  }).join('');
+  const tagsHtml = [...new Set([...(m.tags||[]),...(m.categories||[])])].map(tag=>`<span class="memo-tag" onclick="setTagFilter('${esc(tag)}')">#${esc(tag)}</span>`).join('');
+  const pricesHtml = Object.entries(m.prices||{}).map(([t,p])=>`<div class="price-badge"><span class="price-badge-ticker">${esc(t)}</span><span class="price-badge-val">${formatPrice(p)}</span><span class="price-badge-yen">円</span></div>`).join('');
+  const repliesHtml = (m.replies||[]).map(r=>{
+    const rTickers=(r.tickers||[]).map(t=>{const n=getTickerName(t);return `<span class="ticker-tag" onclick="openTicker('${esc(t)}')">${'<span class="ticker-tag-code">$'+esc(t)+'</span>'}${n?`<span class="ticker-tag-name">${esc(n)}</span>`:''}</span>`;}).join('');
+    return `<div class="reply-card"><div class="reply-meta">${rTickers}<span class="memo-time" style="margin-left:auto">${formatTime(r.ts)}</span></div><div class="memo-body" style="font-size:13px">${esc(r.text)}</div></div>`;
+  }).join('');
+  const scheduleTitleHtml = m.type === 'SCHEDULE' && m.scheduleTitle
+    ? `<div style="font-size:15px;font-weight:700;color:#b47fff;margin-bottom:4px;">📅 ${esc(m.scheduleTitle)}</div>`
+    : '';
+  const typeLabel = m.type === 'SCHEDULE' ? '📅 予定' : m.type;
+  return `<div class="memo-card" id="card-${pfx}${m.id}">
+    <div class="memo-meta">
+      <span class="memo-type ${m.type}" style="background:${tcBg};color:${tcFg}">${typeLabel}</span>
+      <span class="memo-time">${formatTime(m.ts)}</span>
+    </div>
+    ${tickerHtml?`<div class="ticker-tags">${tickerHtml}</div>`:''}
+    ${scheduleTitleHtml}
+    <div class="memo-body">${esc(m.text)}</div>
+    ${tagsHtml?`<div class="memo-tags">${tagsHtml}</div>`:''}
+    ${pricesHtml?`<div class="price-badges">${pricesHtml}</div>`:''}
+    ${(m.images||[]).length>0?`<div class="memo-images">${m.images.map(url=>`<img class="memo-img" src="" data-src="${url}" alt="" onclick="openLightbox('${url}')">`).join('')}</div>`:''}
+    ${repliesHtml?`<div class="thread">${repliesHtml}</div>`:''}
+    <div class="reply-compose" id="rc-${pfx}${m.id}">
+      <textarea id="rt-${pfx}${m.id}" placeholder="ツリーに追加..." rows="2"></textarea>
+      <input type="text" id="rtic-${pfx}${m.id}" placeholder="$銘柄コード" style="width:130px;margin-top:6px;" class="text-input">
+      <div class="reply-footer">
+        <button class="cancel-btn" onclick="closeReply('${pfx}${m.id}')">キャンセル</button>
+        <button class="reply-post-btn" onclick="postReply('${pfx}${m.id}')">追加</button>
+      </div>
+    </div>
+    <div class="memo-actions">
+      <button class="action-btn reply" onclick="toggleReply('${pfx}${m.id}')">💬 ツリー${(m.replies||[]).length>0?` (${m.replies.length})`:''}</button>
+      <button class="action-btn edit" onclick="openEditModal('${m.id}')">✏️ 編集</button>
+      <button class="action-btn del" onclick="deleteMemo('${m.id}')">🗑 削除</button>
+    </div>
+  </div>`;
+}
+
+// ===== REPLY =====
+function toggleReply(pfxId) {
+  const el = document.getElementById('rc-'+pfxId);
+  el.classList.toggle('open');
+  if(el.classList.contains('open')) document.getElementById('rt-'+pfxId).focus();
+}
+function closeReply(pfxId) { document.getElementById('rc-'+pfxId).classList.remove('open'); }
+function postReply(pfxId) {
+  const text = document.getElementById('rt-'+pfxId).value.trim();
+  if(!text) return;
+  const tickers = parseTickers(document.getElementById('rtic-'+pfxId).value);
+  // pfxを除いた純粋なIDでmemoを検索
+  const rawId = pfxId.replace(/^(day_|ov_)/, '');
+  const memo = memos.find(m=>m.id===rawId);
+  if(!memo) return;
+  tickers.forEach(t=>{ if(!(memo.tickers||[]).includes(t)) memo.tickers.push(t); });
+  memo.replies = memo.replies||[];
+  memo.replies.push({id:genId(),text,tickers,ts:Date.now()});
+  save();
+  renderFeed(); renderTickers();
+  if (currentDayKey && document.getElementById('day-overlay').classList.contains('open')) {
+    refreshDayList(currentDayKey);
+  }
+}
+
+// ===== DELETE =====
+function deleteMemo(id) {
+  if(!confirm('このメモを削除しますか？')) return;
+  memos = memos.filter(m=>m.id!==id);
+  save(); renderFeed(); renderTickers(); renderTags(); renderCalendar();
+  if (currentDayKey && document.getElementById('day-overlay').classList.contains('open')) {
+    refreshDayList(currentDayKey);
+  }
+}
+
+// ===== EDIT =====
+function openEditModal(id) {
+  const m = memos.find(m=>m.id===id);
+  if(!m) return;
+  editingId = id;
+  editType = m.type;
+  document.getElementById('edit-text').value = m.text;
+  document.getElementById('edit-tickers').value = (m.tickers||[]).join(',');
+  document.querySelectorAll('#edit-type-btns .type-btn').forEach(b=>{
+    b.classList.toggle('active', b.textContent===m.type);
+  });
+  const editCats = m.categories||[];
+  document.querySelectorAll('#edit-cat-row .cat-chip').forEach(b=>{
+    b.classList.toggle('active', editCats.includes(b.textContent));
+  });
+  updateEditPriceInputs(m.prices||{});
+  document.getElementById('edit-overlay').classList.add('open');
+}
+function setEditType(btn, t) {
+  editType = t;
+  document.querySelectorAll('#edit-type-btns .type-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function toggleEditCat(btn) { btn.classList.toggle('active'); }
+function updateEditPriceInputs(existingPrices) {
+  const raw = document.getElementById('edit-tickers').value;
+  const tickers = parseTickers(raw);
+  const row = document.getElementById('edit-price-inputs-row');
+  const existing = existingPrices || {};
+  if(!existingPrices) {
+    row.querySelectorAll('.price-entry').forEach(el=>{
+      const t=el.dataset.ticker,v=el.querySelector('input').value;
+      if(t&&v) existing[t]=v;
+    });
+  }
+  row.innerHTML = tickers.map(t=>{
+    const name=getTickerName(t);
+    return `<div class="price-entry" data-ticker="${t}">
+      <span class="price-entry-ticker">$${t}</span>
+      ${name?`<span class="price-entry-name">${esc(name)}</span>`:''}
+      <input type="number" placeholder="0" min="0" step="0.01" value="${existing[t]||''}">
+      <span class="price-entry-yen">円</span>
+    </div>`;
+  }).join('');
+}
+function saveEdit() {
+  const text = document.getElementById('edit-text').value.trim();
+  if(!text) return;
+  const tickers = parseTickers(document.getElementById('edit-tickers').value);
+  const prices = getPrices('edit-price-inputs-row');
+  const categories = [...document.querySelectorAll('#edit-cat-row .cat-chip.active')].map(b=>b.textContent);
+  const idx = memos.findIndex(m=>m.id===editingId);
+  if(idx<0) return;
+  memos[idx] = { ...memos[idx], text, tickers, type:editType, prices, tags:parseTags(text), categories };
+  save(); closeEditModal(); renderFeed(); renderTickers(); renderTags(); renderCalendar();
+  if (currentDayKey && document.getElementById('day-overlay').classList.contains('open')) {
+    refreshDayList(currentDayKey);
+  }
+}
+function closeEditModal() {
+  document.getElementById('edit-overlay').classList.remove('open');
+  editingId = null;
+}
+function editOverlayBgClose(e) { if(e.target===document.getElementById('edit-overlay')) closeEditModal(); }
+
+// ===== TICKERS =====
+function renderTickers() {
+  const map = {};
+  memos.forEach(m=>{
+    (m.tickers||[]).forEach(t=>{ if(!map[t]) map[t]=[]; map[t].push(m); });
+    (m.replies||[]).forEach(r=>(r.tickers||[]).forEach(t=>{ if(!map[t]) map[t]=[]; if(!map[t].some(x=>x.id===m.id)) map[t].push(m); }));
+  });
+  const grid = document.getElementById('ticker-grid');
+  const keys = Object.keys(map).sort();
+  if(!keys.length) { grid.innerHTML='<div class="empty" style="grid-column:1/-1"><span class="empty-icon">📈</span>銘柄タグを付けて投稿すると表示されます</div>'; return; }
+  grid.innerHTML = keys.map(t=>{
+    const ms=map[t], name=getTickerName(t);
+    const hasBuy=ms.some(m=>m.type==='BUY'), hasSell=ms.some(m=>m.type==='SELL');
+    return `<div class="ticker-card" onclick="openTicker('${t}')">
+      <div class="ticker-card-code">$${t}</div>
+      ${name?`<div class="ticker-card-name">${esc(name)}</div>`:''}
+      <div class="ticker-card-count">${ms.length}件のメモ</div>
+      <div class="ticker-badges">
+        ${hasBuy?'<span class="ticker-badge buy">BUY</span>':''}
+        ${hasSell?'<span class="ticker-badge sell">SELL</span>':''}
+      </div>
+    </div>`;
+  }).join('');
+}
+function openTicker(ticker) {
+  const ms = memos.filter(m=>(m.tickers||[]).includes(ticker));
+  const name = getTickerName(ticker);
+  document.getElementById('ov-ticker-code').textContent = '$'+ticker;
+  document.getElementById('ov-ticker-name').textContent = name||'';
+  document.getElementById('ov-ticker-count').textContent = `${ms.length}件のメモ`;
+  document.getElementById('ov-chart').innerHTML = renderChart(ticker);
+
+  // 外部サイトへのリンクボタン
+  const yahooEl = document.getElementById('ov-yahoo-chart');
+  const isJP = /^\d{4}$/.test(ticker);
+  if (isJP) {
+    const code4 = ticker.padStart(4, '0');
+    yahooEl.innerHTML = `
+      <div style="background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:4px;">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">📊 チャートを外部サイトで確認</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <a href="https://kabutan.jp/stock/chart?code=${code4}" target="_blank" style="display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:7px 14px;color:var(--text2);text-decoration:none;font-size:12px;transition:.15s;" onmouseover="this.style.borderColor='#0099ff';this.style.color='#0099ff'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
+            📊 株探でチャートを見る →
+          </a>
+        </div>
+      </div>`;
+  } else {
+    // 米国株
+    yahooEl.innerHTML = `
+      <div style="background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:4px;">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">📊 チャートを外部サイトで確認</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <a href="https://finance.yahoo.com/quote/${ticker}" target="_blank" style="display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:7px 14px;color:var(--text2);text-decoration:none;font-size:12px;transition:.15s;" onmouseover="this.style.borderColor='#0099ff';this.style.color='#0099ff'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
+            📈 Yahoo Finance
+          </a>
+          <a href="https://www.tradingview.com/symbols/${ticker}/" target="_blank" style="display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:7px 14px;color:var(--text2);text-decoration:none;font-size:12px;transition:.15s;" onmouseover="this.style.borderColor='#0099ff';this.style.color='#0099ff'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
+            📐 TradingView
+          </a>
+        </div>
+      </div>`;
+  }
+
+
+  document.getElementById('ov-memo-list').innerHTML = ms.length ? ms.map(m=>renderCard(m,'ov_')).join('') : '<div class="empty"><span class="empty-icon">📋</span>メモなし</div>';
+  document.getElementById('ticker-overlay').classList.add('open');
+  if (isJP) setTimeout(() => { ms.forEach(m => { if((m.images||[]).length>0) loadCardImages(m.id, m.images); }); }, 50);
+}
+
+
+// ===== CHART =====
+function renderChart(ticker) {
+  const points = memos
+    .filter(m=>(m.tickers||[]).includes(ticker)&&m.prices&&m.prices[ticker])
+    .map(m=>({ts:m.ts,price:m.prices[ticker],type:m.type}))
+    .sort((a,b)=>a.ts-b.ts);
+  if(points.length<2) return '<p style="color:var(--text3);font-size:12px;padding:12px 0;">株価記録が2件以上あるとチャートを表示します</p>';
+  const W=540,H=120,pl=48,pr=12,pt=10,pb=26;
+  const prices=points.map(p=>p.price);
+  const minP=Math.min(...prices),maxP=Math.max(...prices),rangeP=maxP-minP||1;
+  const minTs=points[0].ts,maxTs=points[points.length-1].ts,rangeTs=maxTs-minTs||1;
+  const iW=W-pl-pr,iH=H-pt-pb;
+  const toX=ts=>pl+((ts-minTs)/rangeTs)*iW;
+  const toY=p=>pt+(1-(p-minP)/rangeP)*iH;
+  const poly=points.map(p=>`${toX(p.ts)},${toY(p.price)}`).join(' ');
+  const yLabels=[minP,(minP+maxP)/2,maxP];
+  const gridLines=yLabels.map(v=>`<line x1="${pl}" y1="${toY(v)}" x2="${W-pr}" y2="${toY(v)}" stroke="#252d3a" stroke-dasharray="3,3"/><text x="${pl-4}" y="${toY(v)+4}" font-size="9" fill="#4a5568" text-anchor="end">${v>=1000?(v/1000).toFixed(1)+'k':v}</text>`).join('');
+  const dotColor={BUY:'#00d4aa',SELL:'#ff4d6a'};
+  const dots=points.map(p=>`<circle cx="${toX(p.ts)}" cy="${toY(p.price)}" r="4" fill="${dotColor[p.type]||'#00d4aa'}" stroke="#0f1318" stroke-width="1.5"/>`).join('');
+  return `<div class="chart-wrap">
+    <div class="chart-title">📈 株価推移（記録値）</div>
+    <svg class="price-chart" viewBox="0 0 ${W} ${H}" style="height:${H}px">${gridLines}<polyline points="${poly}" fill="none" stroke="#00d4aa" stroke-width="2" stroke-linejoin="round"/>${dots}</svg>
+    <div class="chart-legend">
+      <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#00d4aa"></div>BUY</div>
+      <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#ff4d6a"></div>SELL</div>
+      <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#00d4aa"></div>その他</div>
+    </div>
+  </div>`;
+}
+
+// ===== CALENDAR =====
+function renderCalendar() {
+  document.getElementById('cal-month-title').textContent = `${calYear}年 ${calMonth+1}月`;
+  const todayKey = toDateKey(Date.now());
+  const firstDay = new Date(calYear,calMonth,1).getDay();
+  const daysInMonth = new Date(calYear,calMonth+1,0).getDate();
+  const memoMap = {};
+  memos.forEach(m=>{
+    const d=new Date(m.ts);
+    if(d.getFullYear()===calYear&&d.getMonth()===calMonth){
+      const k=toDateKey(m.ts);
+      if(!memoMap[k]) memoMap[k]=[];
+      memoMap[k].push(m);
+    }
+  });
+  let html='';
+  for(let i=0;i<firstDay;i++) html+='<div class="cal-day empty"></div>';
+  for(let day=1;day<=daysInMonth;day++){
+    const dateKey=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dayMemos=memoMap[dateKey]||[];
+    const isToday=dateKey===todayKey;
+    const dow=(firstDay+day-1)%7;
+    const hasBuy=dayMemos.some(m=>m.type==='BUY');
+    const hasSell=dayMemos.some(m=>m.type==='SELL');
+    const hasNews=dayMemos.some(m=>m.type==='NEWS');
+    const hasMemo=dayMemos.some(m=>m.type==='MEMO');
+    const hasSched=dayMemos.some(m=>m.type==='SCHEDULE');
+    const dotHtml=[hasBuy&&'#00d4aa',hasSell&&'#ff4d6a',hasNews&&'#0099ff',(!hasBuy&&!hasSell&&!hasNews&&!hasSched&&dayMemos.length)&&'#f5c842',hasSched&&'#b47fff'].filter(Boolean).map(c=>`<div class="cal-dot" style="background:${c}"></div>`).join('');
+    const cls=['cal-day',isToday?'today':'',dayMemos.length?'has-memo':'',dow===0&&!isToday?'sun':'',dow===6&&!isToday?'sat':''].filter(Boolean).join(' ');
+    const click=`onclick="openDayModal('${dateKey}')"`;
+    html+=`<div class="${cls}" ${click} style="cursor:pointer"><div class="cal-day-num">${day}</div>${dotHtml?`<div class="cal-dots">${dotHtml}</div>`:''} ${dayMemos.length?`<div class="cal-count">${dayMemos.length}件</div>`:''}</div>`;
+  }
+  document.getElementById('cal-grid').innerHTML=html;
+}
+function calPrev(){ if(calMonth===0){calYear--;calMonth=11;}else calMonth--; renderCalendar(); }
+function calNext(){ if(calMonth===11){calYear++;calMonth=0;}else calMonth++; renderCalendar(); }
+let currentDayKey = null;
+let currentDayType = 'MEMO';
+
+function setDayType(btn, t) {
+  currentDayType = t;
+  document.querySelectorAll('#day-type-btns .type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function openDayModal(dateKey) {
+  currentDayKey = dateKey;
+  currentDayType = 'MEMO';
+  document.querySelectorAll('#day-type-btns .type-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('#day-type-btns .type-btn.MEMO').classList.add('active');
+  document.getElementById('day-compose-text').value = '';
+  document.getElementById('day-compose-tickers').value = '';
+  const [y, mo, d] = dateKey.split('-');
+  document.getElementById('ov-day-title').textContent = `📅 ${parseInt(mo)}月${parseInt(d)}日`;
+  refreshDayList(dateKey);
+  document.getElementById('day-overlay').classList.add('open');
+}
+
+function refreshDayList(dateKey) {
+  const dayMemos = memos.filter(m => toDateKey(m.ts) === dateKey);
+  document.getElementById('ov-day-count').textContent = `${dayMemos.length}件`;
+  const list = document.getElementById('ov-day-list');
+  list.innerHTML = dayMemos.length ? dayMemos.map(m => renderCard(m, 'day_')).join('') : '<div class="empty"><span class="empty-icon">📋</span>まだメモがありません</div>';
+  // 画像のBlob読み込み
+  dayMemos.forEach(m => { if ((m.images || []).length > 0) loadCardImages(m.id, m.images); });
+}
+
+async function postDayMemo() {
+  const text = document.getElementById('day-compose-text').value.trim();
+  if (!text || !currentDayKey) return;
+  const tickers = parseTickers(document.getElementById('day-compose-tickers').value);
+  const [y, mo, d] = currentDayKey.split('-');
+  const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(d), 12, 0, 0).getTime();
+  const memo = { id: genId(), text, tickers, type: currentDayType, prices: {}, tags: parseTags(text), categories: [], images: [], ts, replies: [] };
+  memos.unshift(memo);
+  memos.sort((a, b) => b.ts - a.ts);
+  save();
+  document.getElementById('day-compose-text').value = '';
+  document.getElementById('day-compose-tickers').value = '';
+  refreshDayList(currentDayKey);
+  renderFeed(); renderTickers(); renderTags(); renderCalendar();
+  showToast(`📅 ${parseInt(mo)}月${parseInt(d)}日のメモを追加しました`);
+}
+
+// ===== TAGS =====
+function renderTags() {
+  const allTags=[...new Set(memos.flatMap(m=>[...(m.tags||[]),...(m.categories||[])]))];
+  const fixed=document.getElementById('tag-cards-fixed');
+  const free=document.getElementById('tag-cards-free');
+  const CATS=['決算','材料','マクロ','テクニカル','配当','IPO','その他'];
+  fixed.innerHTML=CATS.map(cat=>{
+    const count=memos.filter(m=>(m.categories||[]).includes(cat)).length;
+    return `<div class="tag-card ${currentTagFilter===cat?'active':''}" onclick="setTagFilter('${cat}')"><div class="tag-card-text">#${cat}</div><div class="tag-card-count">${count}件</div></div>`;
+  }).join('');
+  const freeTags=allTags.filter(t=>!CATS.includes(t));
+  free.innerHTML=freeTags.length?freeTags.map(tag=>{
+    const count=memos.filter(m=>(m.tags||[]).includes(tag)).length;
+    return `<div class="tag-card ${currentTagFilter===tag?'active':''}" onclick="setTagFilter('${tag}')"><div class="tag-card-text">#${tag}</div><div class="tag-card-count">${count}件</div></div>`;
+  }).join(''):'<p style="color:var(--text3);font-size:12px;">メモに #タグ を付けると表示されます</p>';
+}
+
+// ===== OVERLAY =====
+function closeOverlay(id){ document.getElementById(id).classList.remove('open'); }
+function overlayBgClose(e,id){ if(e.target===document.getElementById(id)) closeOverlay(id); }
+
+// ===== NAV =====
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(name==='tickers') renderTickers();
+  if(name==='tags') renderTags();
+  if(name==='calendar') renderCalendar();
+  if(name==='links') renderLinks();
+  syncBottomNav(name);
+}
+function syncBottomNav(name) {
+  const pageOrder = ['feed','calendar','tickers','tags','links'];
+  document.querySelectorAll('.bottom-nav-btn').forEach((b,i) => {
+    b.classList.toggle('active', pageOrder[i] === name);
+  });
+}
+
+// ===== IMAGE UPLOAD =====
+let pendingImages = []; // {file, previewUrl} の配列
+
+function previewImages(e) {
+  const files = Array.from(e.target.files);
+  files.forEach(file => {
+    const url = URL.createObjectURL(file);
+    pendingImages.push({ file, previewUrl: url });
+  });
+  renderImagePreviews();
+  e.target.value = '';
+}
+
+function renderImagePreviews() {
+  const row = document.getElementById('compose-img-previews');
+  row.innerHTML = pendingImages.map((img, i) => `
+    <div class="img-preview-wrap">
+      <img class="img-preview" src="${img.previewUrl}" alt="">
+      <button class="img-preview-remove" onclick="removePreviewImage(${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+function removePreviewImage(i) {
+  URL.revokeObjectURL(pendingImages[i].previewUrl);
+  pendingImages.splice(i, 1);
+  renderImagePreviews();
+}
+
+async function uploadImagesToSupabase(images) {
+  const urls = [];
+  for (const img of images) {
+    const ext = img.file.name.split('.').pop() || 'jpg';
+    const path = `${genId()}.${ext}`;
+    const res = await fetch(`${SB_URL}/storage/v1/object/memo-images/${path}`, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': img.file.type },
+      body: img.file
+    });
+    if (res.ok) {
+      urls.push(`${SB_URL}/storage/v1/object/public/memo-images/${path}`);
+    }
+  }
+  return urls;
+}
+
+// ===== IMAGE LOADER (CORS回避) =====
+const imgCache = {};
+
+async function loadImageAsBlob(url) {
+  if (imgCache[url]) return imgCache[url];
+  try {
+    const res = await fetch(url, { headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` } });
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    imgCache[url] = blobUrl;
+    return blobUrl;
+  } catch { return null; }
+}
+
+async function loadCardImages(memoId, images) {
+  for (const url of images) {
+    const blobUrl = await loadImageAsBlob(url);
+    if (!blobUrl) continue;
+    const card = document.getElementById('card-' + memoId);
+    if (!card) continue;
+    const imgs = card.querySelectorAll('.memo-img');
+    imgs.forEach(img => { if (img.dataset.src === url) img.src = blobUrl; });
+  }
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+}
+
+function openLightbox(url) {
+  const lb = document.getElementById('lightbox');
+  const img = document.getElementById('lightbox-img');
+  img.src = '';
+  lb.classList.add('open');
+  loadImageAsBlob(url).then(blobUrl => { if(blobUrl) img.src = blobUrl; });
+}
+function showToast(msg, duration=2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+// ===== SCHEDULE DATE PICKER =====
+let _spYear, _spMonth, _spSelected = null;
+
+function openScheduleDatePicker() {
+  const now = new Date();
+  // 既存の選択値があればそこを初期表示
+  const hidden = document.getElementById('compose-schedule-date-hidden').value;
+  if (hidden) {
+    const d = new Date(hidden);
+    _spYear = d.getFullYear(); _spMonth = d.getMonth();
+    _spSelected = hidden;
+  } else {
+    _spYear = now.getFullYear(); _spMonth = now.getMonth();
+    _spSelected = null;
+  }
+  renderScheduleDatePicker();
+  document.getElementById('schedule-picker-overlay').style.display = 'flex';
+}
+
+function closeScheduleDatePicker() {
+  document.getElementById('schedule-picker-overlay').style.display = 'none';
+}
+
+function scheduleDatePickerMove(dir) {
+  _spMonth += dir;
+  if (_spMonth < 0) { _spMonth = 11; _spYear--; }
+  if (_spMonth > 11) { _spMonth = 0; _spYear++; }
+  renderScheduleDatePicker();
+}
+
+function renderScheduleDatePicker() {
+  document.getElementById('sched-picker-title').textContent = `${_spYear}年 ${_spMonth + 1}月`;
+  const grid = document.getElementById('sched-picker-grid');
+  const first = new Date(_spYear, _spMonth, 1).getDay();
+  const days = new Date(_spYear, _spMonth + 1, 0).getDate();
+  let html = '';
+  for (let i = 0; i < first; i++) html += '<div></div>';
+  for (let d = 1; d <= days; d++) {
+    const dateStr = `${_spYear}-${String(_spMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isSelected = dateStr === _spSelected;
+    const dow = (first + d - 1) % 7;
+    const color = dow === 0 ? 'var(--red)' : dow === 6 ? '#6af' : 'var(--text)';
+    html += `<div onclick="selectScheduleDate('${dateStr}')" style="padding:5px 2px;text-align:center;border-radius:6px;cursor:pointer;font-size:13px;color:${color};${isSelected?'background:rgba(106,63,160,.4);border:1px solid #b47fff;font-weight:700;':''}transition:.1s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='${isSelected?'rgba(106,63,160,.4)':'transparent'}'">${d}</div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function selectScheduleDate(dateStr) {
+  _spSelected = dateStr;
+  document.getElementById('compose-schedule-date-hidden').value = dateStr;
+  const [y, m, d] = dateStr.split('-');
+  document.getElementById('compose-schedule-date').value = `${y}年${parseInt(m)}月${parseInt(d)}日`;
+  renderScheduleDatePicker();
+  setTimeout(closeScheduleDatePicker, 200);
+}
+let searchQuery = '';
+
+function onSearch(val) {
+  searchQuery = val.trim();
+  document.getElementById('search-clear').style.display = searchQuery ? 'block' : 'none';
+  renderFeed();
+  if (searchQuery) showPage('feed', document.querySelector('.nav-btn'));
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  searchQuery = '';
+  document.getElementById('search-clear').style.display = 'none';
+  renderFeed();
+}
+
+// ===== LINKS =====
+const LINKS_KEY = 'sn_links_v1';
+let links = [];
+
+const DEFAULT_LINKS = [
+  { id: genId(), title: '日経電子版', url: 'https://www.nikkei.com' },
+  { id: genId(), title: 'Bloomberg Japan', url: 'https://www.bloomberg.co.jp' },
+  { id: genId(), title: 'Yahoo!ファイナンス', url: 'https://finance.yahoo.co.jp' },
+  { id: genId(), title: 'SBI証券', url: 'https://www.sbisec.co.jp' },
+  { id: genId(), title: '楽天証券', url: 'https://www.rakuten-sec.co.jp' },
+  { id: genId(), title: 'TradingView', url: 'https://jp.tradingview.com' },
+  { id: genId(), title: 'Investing.com', url: 'https://jp.investing.com' },
+  { id: genId(), title: 'Reuters', url: 'https://jp.reuters.com' },
+];
+
+async function saveLinks() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/memos?id=eq.stocknote_links`, { headers: SB_HEADERS });
+    const existing = await res.json();
+    const method = existing.length > 0 ? 'PATCH' : 'POST';
+    const url = existing.length > 0 ? `${SB_URL}/rest/v1/memos?id=eq.stocknote_links` : `${SB_URL}/rest/v1/memos`;
+    await fetch(url, {
+      method, headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ id: 'stocknote_links', data: links, updated_at: new Date().toISOString() })
+    });
+  } catch {}
+  localStorage.setItem(LINKS_KEY, JSON.stringify(links));
+}
+
+async function loadLinks() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/memos?id=eq.stocknote_links`, { headers: SB_HEADERS });
+    const rows = await res.json();
+    if (rows.length > 0 && Array.isArray(rows[0].data)) {
+      links = rows[0].data;
+      localStorage.setItem(LINKS_KEY, JSON.stringify(links));
+      return;
+    }
+  } catch {}
+  const raw = localStorage.getItem(LINKS_KEY);
+  links = raw ? JSON.parse(raw) : DEFAULT_LINKS;
+  if (!raw) saveLinks();
+}
+
+function getFavicon(url) {
+  try {
+    const domain = new URL(url).origin;
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+  } catch { return null; }
+}
+
+function renderLinks() {
+  const list = document.getElementById('link-list');
+  if (!list) return;
+  if (!links.length) {
+    list.innerHTML = '<div class="empty"><span class="empty-icon">🔗</span>リンクがありません</div>';
+    return;
+  }
+  list.innerHTML = links.map(lk => {
+    const favicon = getFavicon(lk.url);
+    return `<div class="link-card">
+      ${favicon ? `<img class="link-favicon" src="${favicon}" onerror="this.style.display='none'" alt="">` : ''}
+      <div class="link-info">
+        <div class="link-title" onclick="window.open('${esc(lk.url)}','_blank')">${esc(lk.title)}</div>
+        <div class="link-url">${esc(lk.url)}</div>
+      </div>
+      <a class="link-open-btn" href="${esc(lk.url)}" target="_blank" rel="noopener">開く ↗</a>
+      <button class="link-del-btn" onclick="deleteLink('${lk.id}')" title="削除">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+function addLink() {
+  const titleEl = document.getElementById('link-title-input');
+  const urlEl = document.getElementById('link-url-input');
+  let title = titleEl.value.trim();
+  let url = urlEl.value.trim();
+  if (!url) return;
+  if (!url.startsWith('http')) url = 'https://' + url;
+  if (!title) { try { title = new URL(url).hostname; } catch { title = url; } }
+  links.unshift({ id: genId(), title, url });
+  saveLinks();
+  renderLinks();
+  titleEl.value = '';
+  urlEl.value = '';
+  showToast(`🔗 ${title} を追加しました`);
+}
+
+function deleteLink(id) {
+  if (!confirm('このリンクを削除しますか？')) return;
+  links = links.filter(lk => lk.id !== id);
+  saveLinks();
+  renderLinks();
+}
+
+// Enterキーで追加
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (document.activeElement.id === 'link-title-input' || document.activeElement.id === 'link-url-input')) {
+    addLink();
+  }
+});
+
+init();
+</script>
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+</body>
+</html>
