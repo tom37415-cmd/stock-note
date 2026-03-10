@@ -48,8 +48,12 @@ nav{display:flex;gap:4px;flex:1;overflow:hidden;}
 .link-add-btn{background:var(--accent);color:#000;border:none;border-radius:8px;padding:8px 18px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap;}
 .link-add-btn:hover{background:#00efc0;}
 .link-list{display:flex;flex-direction:column;gap:10px;}
-.link-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;transition:.15s;}
+.link-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;transition:.15s;cursor:default;}
 .link-card:hover{border-color:var(--border2);}
+.link-card.dragging{opacity:.4;border-style:dashed;}
+.link-card.drag-over{border-color:var(--accent);background:rgba(0,212,170,.06);}
+.link-drag-handle{color:var(--text3);cursor:grab;font-size:16px;padding:4px;flex-shrink:0;touch-action:none;user-select:none;}
+.link-drag-handle:active{cursor:grabbing;}
 .link-favicon{width:20px;height:20px;border-radius:4px;flex-shrink:0;object-fit:contain;}
 .link-info{flex:1;min-width:0;}
 .link-title{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:.15s;}
@@ -1546,7 +1550,8 @@ function renderLinks() {
   }
   list.innerHTML = links.map(lk => {
     const favicon = getFavicon(lk.url);
-    return `<div class="link-card">
+    return `<div class="link-card" data-id="${lk.id}" draggable="true">
+      <span class="link-drag-handle" title="ドラッグして並び替え">⠿</span>
       ${favicon ? `<img class="link-favicon" src="${favicon}" onerror="this.style.display='none'" alt="">` : ''}
       <div class="link-info">
         <div class="link-title" onclick="window.open('${esc(lk.url)}','_blank')">${esc(lk.title)}</div>
@@ -1556,6 +1561,87 @@ function renderLinks() {
       <button class="link-del-btn" onclick="deleteLink('${lk.id}')" title="削除">🗑</button>
     </div>`;
   }).join('');
+  initLinkDrag();
+}
+
+function initLinkDrag() {
+  const list = document.getElementById('link-list');
+  let dragId = null, touchDragEl = null, touchClone = null, touchOverId = null;
+
+  // ===== PC: マウスドラッグ =====
+  list.querySelectorAll('.link-card').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      dragId = card.dataset.id;
+      setTimeout(() => card.classList.add('dragging'), 0);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      list.querySelectorAll('.link-card').forEach(c => c.classList.remove('drag-over'));
+    });
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      list.querySelectorAll('.link-card').forEach(c => c.classList.remove('drag-over'));
+      if (card.dataset.id !== dragId) card.classList.add('drag-over');
+    });
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      const toId = card.dataset.id;
+      if (!dragId || dragId === toId) return;
+      const fromIdx = links.findIndex(l => l.id === dragId);
+      const toIdx = links.findIndex(l => l.id === toId);
+      const [moved] = links.splice(fromIdx, 1);
+      links.splice(toIdx, 0, moved);
+      saveLinks(); renderLinks();
+    });
+  });
+
+  // ===== スマホ: タッチドラッグ =====
+  list.querySelectorAll('.link-drag-handle').forEach(handle => {
+    handle.addEventListener('touchstart', e => {
+      const card = handle.closest('.link-card');
+      dragId = card.dataset.id;
+      touchDragEl = card;
+      const rect = card.getBoundingClientRect();
+      const touch = e.touches[0];
+      // 浮かせるクローン作成
+      touchClone = card.cloneNode(true);
+      touchClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:.85;z-index:9999;pointer-events:none;border-color:var(--accent);box-shadow:0 8px 24px rgba(0,0,0,.5);`;
+      document.body.appendChild(touchClone);
+      card.classList.add('dragging');
+      e.preventDefault();
+    }, { passive: false });
+
+    handle.addEventListener('touchmove', e => {
+      if (!touchClone) return;
+      const touch = e.touches[0];
+      touchClone.style.top = (touch.clientY - 28) + 'px';
+      // どのカードの上にいるか判定
+      document.querySelectorAll('#link-list .link-card:not(.dragging)').forEach(c => {
+        const r = c.getBoundingClientRect();
+        if (touch.clientY >= r.top && touch.clientY <= r.bottom) {
+          touchOverId = c.dataset.id;
+          document.querySelectorAll('#link-list .link-card').forEach(x => x.classList.remove('drag-over'));
+          c.classList.add('drag-over');
+        }
+      });
+      e.preventDefault();
+    }, { passive: false });
+
+    handle.addEventListener('touchend', () => {
+      if (touchClone) { touchClone.remove(); touchClone = null; }
+      if (touchDragEl) touchDragEl.classList.remove('dragging');
+      document.querySelectorAll('#link-list .link-card').forEach(c => c.classList.remove('drag-over'));
+      if (dragId && touchOverId && dragId !== touchOverId) {
+        const fromIdx = links.findIndex(l => l.id === dragId);
+        const toIdx = links.findIndex(l => l.id === touchOverId);
+        const [moved] = links.splice(fromIdx, 1);
+        links.splice(toIdx, 0, moved);
+        saveLinks(); renderLinks();
+      }
+      dragId = null; touchOverId = null; touchDragEl = null;
+    });
+  });
 }
 
 function addLink() {
