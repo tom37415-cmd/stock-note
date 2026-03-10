@@ -506,6 +506,11 @@ svg.price-chart{width:100%;overflow:visible;}
     <!-- TICKERS -->
     <div id="page-tickers" class="page">
       <div class="section-title">// WATCHLIST — 登場銘柄</div>
+      <div class="search-wrap" style="margin-bottom:12px;">
+        <input type="text" id="ticker-search-input" class="search-input" placeholder="🔍 銘柄コード・銘柄名で検索..." oninput="renderTickers()" autocomplete="off">
+        <button class="search-clear" id="ticker-search-clear" onclick="clearTickerSearch()" style="display:none;">✕</button>
+      </div>
+      <div id="ticker-search-result-bar" style="display:none;font-size:12px;color:var(--text3);margin-bottom:8px;"></div>
       <div class="ticker-grid" id="ticker-grid"></div>
     </div>
 
@@ -1116,8 +1121,37 @@ function renderTickers() {
     (m.replies||[]).forEach(r=>(r.tickers||[]).forEach(t=>{ if(!map[t]) map[t]=[]; if(!map[t].some(x=>x.id===m.id)) map[t].push(m); }));
   });
   const grid = document.getElementById('ticker-grid');
-  const keys = Object.keys(map).sort();
-  if(!keys.length) { grid.innerHTML='<div class="empty" style="grid-column:1/-1"><span class="empty-icon">📈</span>銘柄タグを付けて投稿すると表示されます</div>'; return; }
+
+  // 検索フィルター
+  const searchEl = document.getElementById('ticker-search-input');
+  const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  const clearBtn = document.getElementById('ticker-search-clear');
+  const resultBar = document.getElementById('ticker-search-result-bar');
+  if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
+
+  let keys = Object.keys(map).sort();
+  if (q) {
+    keys = keys.filter(t => {
+      const name = (getTickerName(t) || '').toLowerCase();
+      return t.toLowerCase().includes(q) || name.includes(q);
+    });
+  }
+
+  if (resultBar) {
+    if (q) {
+      resultBar.style.display = 'block';
+      resultBar.textContent = `「${q}」の検索結果：${keys.length}件`;
+    } else {
+      resultBar.style.display = 'none';
+    }
+  }
+
+  if(!keys.length) {
+    grid.innerHTML = q
+      ? `<div class="empty" style="grid-column:1/-1"><span class="empty-icon">🔍</span>「${esc(q)}」に一致する銘柄がありません</div>`
+      : '<div class="empty" style="grid-column:1/-1"><span class="empty-icon">📈</span>銘柄タグを付けて投稿すると表示されます</div>';
+    return;
+  }
   grid.innerHTML = keys.map(t=>{
     const ms=map[t], name=getTickerName(t);
     const hasBuy=ms.some(m=>m.type==='BUY'), hasSell=ms.some(m=>m.type==='SELL');
@@ -1131,6 +1165,12 @@ function renderTickers() {
       </div>
     </div>`;
   }).join('');
+}
+
+function clearTickerSearch() {
+  const el = document.getElementById('ticker-search-input');
+  if (el) { el.value = ''; el.focus(); }
+  renderTickers();
 }
 function openTicker(ticker) {
   const ms = memos.filter(m=>(m.tickers||[]).includes(ticker));
