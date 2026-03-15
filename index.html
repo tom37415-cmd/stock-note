@@ -669,6 +669,7 @@ function updateTickerDBStatus(count, ts) {
 }
 
 async function loadJPXTickers() {
+  // まずlocalStorageキャッシュを確認
   try {
     const cache = localStorage.getItem('sn_tickers_cache');
     if (cache) {
@@ -680,6 +681,20 @@ async function loadJPXTickers() {
       }
     }
   } catch {}
+
+  // キャッシュがなければSupabaseから取得
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/memos?id=eq.stocknote_tickers`, { headers: SB_HEADERS });
+    const rows = await res.json();
+    if (rows.length && rows[0].data && rows[0].data.tickers) {
+      const { tickers, ts } = rows[0].data;
+      TICKER_NAMES = { ...TICKER_NAMES, ...tickers };
+      localStorage.setItem('sn_tickers_cache', JSON.stringify({ data: tickers, ts }));
+      updateTickerDBStatus(Object.keys(tickers).length, ts);
+      return;
+    }
+  } catch {}
+
   updateTickerDBStatus(0, null);
 }
 
@@ -705,9 +720,25 @@ function reloadTickerDB() {
     }
     TICKER_NAMES = { ...TICKER_NAMES, ...data };
     const ts = Date.now();
+    // localStorageに保存
     localStorage.setItem('sn_tickers_cache', JSON.stringify({ data, ts }));
     updateTickerDBStatus(Object.keys(data).length, ts);
-    showToast(`📊 銘柄DB更新完了：${Object.keys(data).length.toLocaleString()}件`);
+
+    // Supabaseにも保存してスマホと共有
+    try {
+      if (statusEl) { statusEl.textContent = 'Supabaseに同期中...'; }
+      const existing = await fetch(`${SB_URL}/rest/v1/memos?id=eq.stocknote_tickers`, { headers: SB_HEADERS }).then(r=>r.json());
+      const payload = { id: 'stocknote_tickers', data: { tickers: data, ts } };
+      const url = existing.length > 0
+        ? `${SB_URL}/rest/v1/memos?id=eq.stocknote_tickers`
+        : `${SB_URL}/rest/v1/memos`;
+      const method = existing.length > 0 ? 'PATCH' : 'POST';
+      await fetch(url, { method, headers: SB_HEADERS, body: JSON.stringify(payload) });
+      showToast(`📊 銘柄DB更新完了：${Object.keys(data).length.toLocaleString()}件（スマホにも同期済み）`);
+    } catch {
+      showToast(`📊 銘柄DB更新完了：${Object.keys(data).length.toLocaleString()}件`);
+    }
+    updateTickerDBStatus(Object.keys(data).length, ts);
     renderFeed(); renderTickers();
   };
   input.click();
