@@ -411,7 +411,16 @@ svg.price-chart{width:100%;overflow:visible;}
         <button class="search-clear" id="search-clear" onclick="clearSearch()" style="display:none">✕</button>
       </div>
       <div class="compose-box">
-        <div class="compose-label">// NEW MEMO</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div class="compose-label" style="margin-bottom:0;">// NEW MEMO</div>
+          <div style="position:relative;">
+            <button onclick="toggleTemplatePicker()" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text3);border-radius:7px;padding:4px 10px;font-size:11px;cursor:pointer;transition:.15s;" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text3)'">📋 テンプレート</button>
+            <div id="template-picker" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg2);border:1px solid var(--border2);border-radius:10px;z-index:300;min-width:220px;box-shadow:0 8px 24px rgba(0,0,0,.5);overflow:hidden;animation:slideUp .15s ease;">
+              <div style="font-size:10px;color:var(--text3);padding:8px 12px 4px;font-family:monospace;">// テンプレートを選択</div>
+              <div id="template-picker-list" style="max-height:240px;overflow-y:auto;padding:4px;"></div>
+            </div>
+          </div>
+        </div>
         <div class="tag-suggest-wrap">
           <textarea id="compose-text" placeholder="株式ニュース、売買記録、分析メモなど...&#10;#タグ で自由タグ付け可能" rows="3" oninput="onTagSuggest(this,'compose-tag-suggest')" onkeydown="onTagSuggestKey(event,'compose-tag-suggest')"></textarea>
           <div id="compose-tag-suggest" class="tag-suggest-dropdown" style="display:none;"></div>
@@ -558,6 +567,23 @@ svg.price-chart{width:100%;overflow:visible;}
         </div>
       </div>
       <div class="link-list" id="link-list"></div>
+
+      <!-- テンプレート管理 -->
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);">
+        <div class="section-title" style="margin-bottom:12px;">// TEMPLATES — 投稿テンプレート</div>
+        <div class="link-add-box">
+          <div class="compose-label">// テンプレートを追加</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input type="text" id="tmpl-name-input" class="text-input" placeholder="テンプレート名（例：市場動向）" style="flex:1;">
+            <button class="link-add-btn" onclick="addTemplate()">＋ 追加</button>
+          </div>
+          <div class="tag-suggest-wrap">
+            <textarea id="tmpl-body-input" placeholder="テンプレート本文&#10;例）📊 日経平均：円（前日比 ％）&#10;&#10;【市場動向】&#10;&#10;【注目銘柄】" rows="5"></textarea>
+          </div>
+        </div>
+        <div id="tmpl-list" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;"></div>
+      </div>
+
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);">
         <div class="compose-label">// 銘柄DB</div>
         <div style="margin-top:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -872,7 +898,7 @@ function save() { saveToSupabase(); }
 // ===== INIT =====
 async function init() {
   setSyncStatus('syncing');
-  await Promise.all([loadFromSupabase(), loadLinks(), loadJPXTickers()]);
+  await Promise.all([loadFromSupabase(), loadLinks(), loadJPXTickers(), loadTemplates()]);
   renderFeed(); renderTickers(); renderTags(); renderCalendar();
 }
 
@@ -1685,6 +1711,148 @@ function clearSearch() {
   renderFeed();
 }
 
+// ===== TEMPLATES =====
+const TMPL_KEY = 'sn_templates_v1';
+let templates = [];
+
+function saveTemplates() {
+  localStorage.setItem(TMPL_KEY, JSON.stringify(templates));
+  syncTemplatesToSupabase();
+}
+
+async function syncTemplatesToSupabase() {
+  try {
+    const existing = await fetch(`${SB_URL}/rest/v1/memos?id=eq.stocknote_templates`, { headers: SB_HEADERS }).then(r => r.json());
+    const payload = { id: 'stocknote_templates', data: { templates } };
+    const url = existing.length > 0 ? `${SB_URL}/rest/v1/memos?id=eq.stocknote_templates` : `${SB_URL}/rest/v1/memos`;
+    const method = existing.length > 0 ? 'PATCH' : 'POST';
+    await fetch(url, { method, headers: SB_HEADERS, body: JSON.stringify(payload) });
+  } catch {}
+}
+
+async function loadTemplates() {
+  // まずlocalStorage
+  const raw = localStorage.getItem(TMPL_KEY);
+  if (raw) { try { templates = JSON.parse(raw); renderTemplateList(); return; } catch {} }
+  // なければSupabase
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/memos?id=eq.stocknote_templates`, { headers: SB_HEADERS });
+    const rows = await res.json();
+    if (rows.length && rows[0].data?.templates) {
+      templates = rows[0].data.templates;
+      localStorage.setItem(TMPL_KEY, JSON.stringify(templates));
+    }
+  } catch {}
+  renderTemplateList();
+}
+
+function addTemplate() {
+  const name = document.getElementById('tmpl-name-input').value.trim();
+  const body = document.getElementById('tmpl-body-input').value.trim();
+  if (!name || !body) { showToast('⚠️ テンプレート名と本文を入力してください'); return; }
+  templates.push({ id: genId(), name, body });
+  saveTemplates(); renderTemplateList();
+  document.getElementById('tmpl-name-input').value = '';
+  document.getElementById('tmpl-body-input').value = '';
+  showToast(`📋 テンプレート「${name}」を追加しました`);
+}
+
+function deleteTemplate(id) {
+  if (!confirm('このテンプレートを削除しますか？')) return;
+  templates = templates.filter(t => t.id !== id);
+  saveTemplates(); renderTemplateList(); renderTemplatePicker();
+}
+
+function openEditTemplate(id) {
+  const tmpl = templates.find(t => t.id === id);
+  if (!tmpl) return;
+  document.getElementById('tmpl-name-input').value = tmpl.name;
+  document.getElementById('tmpl-body-input').value = tmpl.body;
+  // 追加ボタンを更新ボタンに切り替え
+  const btn = document.querySelector('[onclick="addTemplate()"]');
+  btn.textContent = '✅ 更新';
+  btn.onclick = () => updateTemplate(id);
+  document.getElementById('tmpl-name-input').focus();
+  showPage('links', document.querySelector('[onclick*="links"]'));
+}
+
+function updateTemplate(id) {
+  const name = document.getElementById('tmpl-name-input').value.trim();
+  const body = document.getElementById('tmpl-body-input').value.trim();
+  if (!name || !body) return;
+  const idx = templates.findIndex(t => t.id === id);
+  if (idx < 0) return;
+  templates[idx] = { ...templates[idx], name, body };
+  saveTemplates(); renderTemplateList(); renderTemplatePicker();
+  document.getElementById('tmpl-name-input').value = '';
+  document.getElementById('tmpl-body-input').value = '';
+  // ボタンを戻す
+  const btn = document.querySelector('[onclick*="updateTemplate"]');
+  if (btn) { btn.textContent = '＋ 追加'; btn.onclick = addTemplate; }
+  showToast(`📋 テンプレート「${name}」を更新しました`);
+}
+
+function renderTemplateList() {
+  const list = document.getElementById('tmpl-list');
+  if (!list) return;
+  if (!templates.length) {
+    list.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0;">テンプレートがありません</div>';
+    return;
+  }
+  list.innerHTML = templates.map(t => `
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:700;color:var(--text);">📋 ${esc(t.name)}</span>
+        <div style="display:flex;gap:6px;">
+          <button onclick="openEditTemplate('${t.id}')" style="background:none;border:1px solid var(--border2);color:var(--text3);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text3)'">✏️ 編集</button>
+          <button onclick="deleteTemplate('${t.id}')" style="background:none;border:1px solid var(--border2);color:var(--text3);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text3)'">🗑</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text3);white-space:pre-wrap;max-height:60px;overflow:hidden;text-overflow:ellipsis;line-height:1.6;">${esc(t.body)}</div>
+    </div>`).join('');
+}
+
+function toggleTemplatePicker() {
+  const picker = document.getElementById('template-picker');
+  if (picker.style.display === 'none') {
+    renderTemplatePicker();
+    picker.style.display = 'block';
+    // 外クリックで閉じる
+    setTimeout(() => document.addEventListener('click', closeTemplatePicker, { once: true }), 0);
+  } else {
+    picker.style.display = 'none';
+  }
+}
+
+function closeTemplatePicker(e) {
+  const picker = document.getElementById('template-picker');
+  if (picker && !picker.contains(e.target)) picker.style.display = 'none';
+}
+
+function renderTemplatePicker() {
+  const list = document.getElementById('template-picker-list');
+  if (!list) return;
+  if (!templates.length) {
+    list.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--text3);">テンプレートがありません<br><span style="font-size:11px;">🔗 リンクページで作成できます</span></div>';
+    return;
+  }
+  list.innerHTML = templates.map(t => `
+    <div onclick="applyTemplate('${t.id}')" style="padding:9px 12px;border-radius:7px;cursor:pointer;transition:.1s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='transparent'">
+      <div style="font-size:13px;font-weight:600;color:var(--text);">📋 ${esc(t.name)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;">${esc(t.body.slice(0, 40))}${t.body.length > 40 ? '…' : ''}</div>
+    </div>`).join('');
+}
+
+function applyTemplate(id) {
+  const tmpl = templates.find(t => t.id === id);
+  if (!tmpl) return;
+  const textarea = document.getElementById('compose-text');
+  textarea.value = tmpl.body;
+  textarea.focus();
+  document.getElementById('template-picker').style.display = 'none';
+  showToast(`📋 「${tmpl.name}」を適用しました`);
+}
+
 // ===== LINKS =====
 const LINKS_KEY = 'sn_links_v1';
 let links = [];
@@ -1739,6 +1907,7 @@ function getFavicon(url) {
 function renderLinks() {
   const list = document.getElementById('link-list');
   if (!list) return;
+  renderTemplateList();
   if (!links.length) {
     list.innerHTML = '<div class="empty"><span class="empty-icon">🔗</span>リンクがありません</div>';
     return;
