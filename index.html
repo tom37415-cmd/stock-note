@@ -1065,7 +1065,7 @@ function renderCard(m, pfx='') {
   const pricesHtml = Object.entries(m.prices||{}).map(([t,p])=>`<div class="price-badge"><span class="price-badge-ticker">${esc(t)}</span><span class="price-badge-val">${formatPrice(p)}</span><span class="price-badge-yen">円</span></div>`).join('');
   const repliesHtml = (m.replies||[]).map(r=>{
     const rTickers=(r.tickers||[]).map(t=>{const n=getTickerName(t);return `<span class="ticker-tag" onclick="openTicker('${esc(t)}')">${'<span class="ticker-tag-code">$'+esc(t)+'</span>'}${n?`<span class="ticker-tag-name">${esc(n)}</span>`:''}</span>`;}).join('');
-    return `<div class="reply-card"><div class="reply-meta">${rTickers}<span class="memo-time" style="margin-left:auto">${formatTime(r.ts)}</span></div><div class="memo-body" style="font-size:13px">${esc(r.text)}</div></div>`;
+    return `<div class="reply-card"><div class="reply-meta">${rTickers}<span class="memo-time" style="margin-left:auto">${formatTime(r.ts)}</span></div><div class="memo-body" style="font-size:13px">${renderBody(r.text)}</div></div>`;
   }).join('');
   const scheduleTitleHtml = m.type === 'SCHEDULE' && m.scheduleTitle
     ? `<div style="font-size:15px;font-weight:700;color:#b47fff;margin-bottom:4px;">📅 ${esc(m.scheduleTitle)}</div>`
@@ -1078,7 +1078,7 @@ function renderCard(m, pfx='') {
     </div>
     ${tickerHtml?`<div class="ticker-tags">${tickerHtml}</div>`:''}
     ${scheduleTitleHtml}
-    <div class="memo-body">${esc(m.text)}</div>
+    <div class="memo-body">${renderBody(m.text)}</div>
     ${tagsHtml?`<div class="memo-tags">${tagsHtml}</div>`:''}
     ${pricesHtml?`<div class="price-badges">${pricesHtml}</div>`:''}
     ${(m.images||[]).length>0?`<div class="memo-images">${m.images.map(url=>`<img class="memo-img" src="" data-src="${url}" alt="" onclick="openLightbox('${url}')">`).join('')}</div>`:''}
@@ -1099,7 +1099,21 @@ function renderCard(m, pfx='') {
   </div>`;
 }
 
-// ===== REPLY =====
+function renderBody(text) {
+  // $7203 または 単独の4桁数字（前後が英数字でないもの）を検出
+  const escaped = esc(text);
+  return escaped.replace(/(\$[0-9]{4}[0-9]?(?=[^0-9]|$))|(?<![0-9])([0-9]{4})(?![0-9])/g, (match, withDollar, bare) => {
+    const code = (withDollar || bare).replace('$', '').trim();
+    if (!/^\d{4}$/.test(code)) return match;
+    const name = getTickerName(code);
+    if (!name && !withDollar) return match; // 銘柄名不明の4桁は$なしなら無視
+    const label = withDollar ? `$${code}` : code;
+    const namePart = name ? `<span style="font-size:11px;color:var(--text3);margin-left:2px;">${esc(name)}</span>` : '';
+    return `<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">${label}</span>${namePart}`;
+  });
+}
+
+
 function toggleReply(pfxId) {
   const el = document.getElementById('rc-'+pfxId);
   el.classList.toggle('open');
