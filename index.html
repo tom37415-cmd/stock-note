@@ -824,9 +824,9 @@ function parseBodyTickers(text) {
   // $1234 形式は無条件で抽出
   const dollarMatches = text.match(/\$([0-9]{4})(?![0-9])/g) || [];
   dollarMatches.forEach(m => codes.add(m.replace('$', '')));
-  // 銘柄DB登録済みの4桁数字も抽出
-  const bareMatches = text.match(/(?<![0-9])([0-9]{4})(?![0-9])/g) || [];
-  bareMatches.forEach(m => { if (getTickerName(m)) codes.add(m); });
+  // 銘柄DB登録済みの4桁数字（前後に数字がないもの）
+  const tokens = text.split(/[^0-9]/);
+  tokens.forEach(t => { if (/^[0-9]{4}$/.test(t) && getTickerName(t)) codes.add(t); });
   return [...codes];
 }
 
@@ -1120,17 +1120,25 @@ function renderCard(m, pfx='') {
 }
 
 function renderBody(text) {
-  // $7203 または 単独の4桁数字（前後が英数字でないもの）を検出
+  // Safari対応：lookbehindを使わずトークン分割で処理
+  const parts = text.split(/(\$[0-9]{4}(?![0-9])|(?:^|(?<=[^0-9])))/);
+  // シンプルな方式：$XXXX 形式のみ確実に処理、4桁は別途
   const escaped = esc(text);
-  return escaped.replace(/(\$[0-9]{4}[0-9]?(?=[^0-9]|$))|(?<![0-9])([0-9]{4})(?![0-9])/g, (match, withDollar, bare) => {
-    const code = (withDollar || bare).replace('$', '').trim();
-    if (!/^\d{4}$/.test(code)) return match;
+  // $7203 形式を先に処理
+  let result = escaped.replace(/\$([0-9]{4})(?![0-9])/g, (match, code) => {
     const name = getTickerName(code);
-    if (!name && !withDollar) return match; // 銘柄名不明の4桁は$なしなら無視
-    const label = withDollar ? `$${code}` : code;
     const namePart = name ? `<span style="font-size:11px;color:var(--text3);margin-left:2px;">${esc(name)}</span>` : '';
-    return `<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">${label}</span>${namePart}`;
+    return `<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">$${code}</span>${namePart}`;
   });
+  // 銘柄DB登録済みの4桁数字（すでに$XXXX処理済みの部分は除く）
+  result = result.replace(/(?:[^0-9>])([0-9]{4})(?![0-9<])/g, (match, code) => {
+    const name = getTickerName(code);
+    if (!name) return match;
+    const prefix = match[0]; // 前の1文字を保持
+    const namePart = `<span style="font-size:11px;color:var(--text3);margin-left:2px;">${esc(name)}</span>`;
+    return `${prefix}<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">${code}</span>${namePart}`;
+  });
+  return result;
 }
 
 
