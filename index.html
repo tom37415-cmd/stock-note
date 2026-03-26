@@ -817,6 +817,25 @@ let calMonth = new Date().getMonth();
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(memos)); }
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
 function parseTickers(str) { return str.split(',').map(s=>s.trim().replace(/^\$/,'').toUpperCase()).filter(Boolean); }
+
+// 本文中の銘柄コードを抽出（$7203 または 銘柄DB登録済みの4桁）
+function parseBodyTickers(text) {
+  const codes = new Set();
+  // $1234 形式は無条件で抽出
+  const dollarMatches = text.match(/\$([0-9]{4})(?![0-9])/g) || [];
+  dollarMatches.forEach(m => codes.add(m.replace('$', '')));
+  // 銘柄DB登録済みの4桁数字も抽出
+  const bareMatches = text.match(/(?<![0-9])([0-9]{4})(?![0-9])/g) || [];
+  bareMatches.forEach(m => { if (getTickerName(m)) codes.add(m); });
+  return [...codes];
+}
+
+// tickers配列に本文コードをマージ（重複除去）
+function mergeTickers(tickers, text) {
+  const bodyTickers = parseBodyTickers(text);
+  const merged = [...new Set([...tickers, ...bodyTickers])];
+  return merged;
+}
 function parseTags(str) { return (str.match(/#[\w\u3000-\u9fff]+/g)||[]).map(t=>t.slice(1)); }
 function formatTime(ts) {
   const diff = Math.floor((Date.now()-ts)/1000);
@@ -989,7 +1008,8 @@ async function postMemo() {
     document.getElementById('compose-uploading').style.display = 'none';
   }
 
-  const memo = { id:genId(), text, tickers, type:currentType, prices, tags:parseTags(text), categories:[...selectedCats], images:imageUrls, ts, replies:[], ...(scheduleTitle ? {scheduleTitle} : {}) };
+  const mergedTickers = mergeTickers(tickers, text);
+  const memo = { id:genId(), text, tickers:mergedTickers, type:currentType, prices, tags:parseTags(text), categories:[...selectedCats], images:imageUrls, ts, replies:[], ...(scheduleTitle ? {scheduleTitle} : {}) };
   memos.unshift(memo);
   memos.sort((a,b)=>b.ts-a.ts);
   save();
@@ -1201,7 +1221,8 @@ function saveEdit() {
   const categories = [...document.querySelectorAll('#edit-cat-row .cat-chip.active')].map(b=>b.textContent);
   const idx = memos.findIndex(m=>m.id===editingId);
   if(idx<0) return;
-  memos[idx] = { ...memos[idx], text, tickers, type:editType, prices, tags:parseTags(text), categories };
+  const mergedTickers = mergeTickers(tickers, text);
+  memos[idx] = { ...memos[idx], text, tickers:mergedTickers, type:editType, prices, tags:parseTags(text), categories };
   save(); closeEditModal(); renderFeed(); renderTickers(); renderTags(); renderCalendar();
   if (currentDayKey && document.getElementById('day-overlay').classList.contains('open')) {
     refreshDayList(currentDayKey);
@@ -1216,9 +1237,12 @@ function editOverlayBgClose(e) { if(e.target===document.getElementById('edit-ove
 // ===== TICKERS =====
 function renderTickers() {
   const map = {};
+  const addToMap = (t, m) => { if(!map[t]) map[t]=[]; if(!map[t].some(x=>x.id===m.id)) map[t].push(m); };
   memos.forEach(m=>{
-    (m.tickers||[]).forEach(t=>{ if(!map[t]) map[t]=[]; map[t].push(m); });
-    (m.replies||[]).forEach(r=>(r.tickers||[]).forEach(t=>{ if(!map[t]) map[t]=[]; if(!map[t].some(x=>x.id===m.id)) map[t].push(m); }));
+    (m.tickers||[]).forEach(t=> addToMap(t, m));
+    parseBodyTickers(m.text||'').forEach(t=> addToMap(t, m));
+    (m.replies||[]).forEach(r=>(r.tickers||[]).forEach(t=> addToMap(t, m)));
+  });
   });
   const grid = document.getElementById('ticker-grid');
 
@@ -1273,7 +1297,10 @@ function clearTickerSearch() {
   renderTickers();
 }
 function openTicker(ticker) {
-  const ms = memos.filter(m=>(m.tickers||[]).includes(ticker));
+  const ms = memos.filter(m =>
+    (m.tickers||[]).includes(ticker) ||
+    parseBodyTickers(m.text||'').includes(ticker)
+  );
   const name = getTickerName(ticker);
   document.getElementById('ov-ticker-code').textContent = '$'+ticker;
   document.getElementById('ov-ticker-name').textContent = name||'';
@@ -1420,7 +1447,8 @@ async function postDayMemo() {
   const tickers = parseTickers(document.getElementById('day-compose-tickers').value);
   const [y, mo, d] = currentDayKey.split('-');
   const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(d), 12, 0, 0).getTime();
-  const memo = { id: genId(), text, tickers, type: currentDayType, prices: {}, tags: parseTags(text), categories: [], images: [], ts, replies: [] };
+  const mergedTickers = mergeTickers(tickers, text);
+  const memo = { id: genId(), text, tickers: mergedTickers, type: currentDayType, prices: {}, tags: parseTags(text), categories: [], images: [], ts, replies: [] };
   memos.unshift(memo);
   memos.sort((a, b) => b.ts - a.ts);
   save();
