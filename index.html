@@ -1120,26 +1120,23 @@ function renderCard(m, pfx='') {
 }
 
 function renderBody(text) {
-  // Safari対応：lookbehindを使わずトークン分割で処理
-  const parts = text.split(/(\$[0-9]{4}(?![0-9])|(?:^|(?<=[^0-9])))/);
-  // シンプルな方式：$XXXX 形式のみ確実に処理、4桁は別途
   const escaped = esc(text);
-  // $7203 形式を先に処理
+  // $7203 形式を処理
   let result = escaped.replace(/\$([0-9]{4})(?![0-9])/g, (match, code) => {
     const name = getTickerName(code);
     const namePart = name ? `<span style="font-size:11px;color:var(--text3);margin-left:2px;">${esc(name)}</span>` : '';
     return `<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">$${code}</span>${namePart}`;
   });
-  // 銘柄DB登録済みの4桁数字（すでに$XXXX処理済みの部分は除く）
-  result = result.replace(/(?:[^0-9>])([0-9]{4})(?![0-9<])/g, (match, code) => {
+  // 銘柄DB登録済みの4桁数字（$処理済みスパンの中は触らない）
+  result = result.replace(/([^0-9])([0-9]{4})([^0-9<]|$)/g, (match, pre, code, post) => {
     const name = getTickerName(code);
     if (!name) return match;
-    const prefix = match[0]; // 前の1文字を保持
     const namePart = `<span style="font-size:11px;color:var(--text3);margin-left:2px;">${esc(name)}</span>`;
-    return `${prefix}<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">${code}</span>${namePart}`;
+    return `${pre}<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">${code}</span>${namePart}${post}`;
   });
   return result;
 }
+
 
 
 function toggleReply(pfxId) {
