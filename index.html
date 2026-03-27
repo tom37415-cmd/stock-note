@@ -1655,25 +1655,9 @@ function insertTag(e, dropdownId) {
   textarea.setSelectionRange(newPos, newPos);
   textarea.focus();
   dropdown.style.display = 'none';
+  _tagSuggestIdx = -1;
 }
 
-// 検索機能の補完
-let searchQuery = '';
-function onSearch(val) {
-  searchQuery = val.trim();
-  document.getElementById('search-clear').style.display = searchQuery ? 'block' : 'none';
-  renderFeed();
-}
-function clearSearch() {
-  document.getElementById('search-input').value = '';
-  onSearch('');
-}
-
-// ページ初期化の実行
-init();
-</script>
-</body>
-</html>
 function onTagSuggestKey(e, dropdownId) {
   const dropdown = document.getElementById(dropdownId);
   if (dropdown.style.display === 'none') return;
