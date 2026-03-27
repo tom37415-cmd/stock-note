@@ -1248,7 +1248,6 @@ function renderTickers() {
     parseBodyTickers(m.text||'').forEach(t=> addToMap(t, m));
     (m.replies||[]).forEach(r=>(r.tickers||[]).forEach(t=> addToMap(t, m)));
   });
-  });
   const grid = document.getElementById('ticker-grid');
 
   // 検索フィルター
