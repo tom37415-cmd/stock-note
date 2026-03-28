@@ -1120,21 +1120,35 @@ function renderCard(m, pfx='') {
 }
 
 function renderBody(text) {
-  const escaped = esc(text);
-  // $7203 形式を処理
-  let result = escaped.replace(/\$([0-9]{4})(?![0-9])/g, (match, code) => {
+  // テキストをトークンに分割して順番に処理（二重処理防止）
+  const result = [];
+  // $XXXX または 4桁数字 のパターンで分割
+  const pattern = /(\$[0-9]{4})(?![0-9])|([0-9]{4})(?![0-9])/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    // マッチ前のテキストをそのままエスケープして追加
+    if (match.index > lastIndex) {
+      result.push(esc(text.slice(lastIndex, match.index)));
+    }
+    const withDollar = match[1]; // $7203 形式
+    const bare = match[2];       // 7203 形式
+    const code = withDollar ? withDollar.slice(1) : bare;
     const name = getTickerName(code);
-    const namePart = name ? `<span style="font-size:11px;color:var(--text3);margin-left:2px;">${esc(name)}</span>` : '';
-    return `<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">$${code}</span>${namePart}`;
-  });
-  // 銘柄DB登録済みの4桁数字（$処理済みスパンの中は触らない）
-  result = result.replace(/([^0-9])([0-9]{4})([^0-9<]|$)/g, (match, pre, code, post) => {
-    const name = getTickerName(code);
-    if (!name) return match;
-    const namePart = `<span style="font-size:11px;color:var(--text3);margin-left:2px;">${esc(name)}</span>`;
-    return `${pre}<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">${code}</span>${namePart}${post}`;
-  });
-  return result;
+    if (withDollar || name) {
+      const label = withDollar ? `$${code}` : code;
+      const namePart = name ? ` <span style="font-size:11px;color:var(--text3);">${esc(name)}</span>` : '';
+      result.push(`<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">${label}</span>${namePart}`);
+    } else {
+      result.push(esc(match[0]));
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  // 残りのテキスト
+  if (lastIndex < text.length) {
+    result.push(esc(text.slice(lastIndex)));
+  }
+  return result.join('');
 }
 
 
