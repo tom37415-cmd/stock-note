@@ -341,6 +341,46 @@ svg.price-chart{width:100%;overflow:visible;}
 
 /* ボトムナビはデスクトップでは非表示 */
 .bottom-nav { display: none; }
+
+/* ===== ヘッダー検索 ===== */
+.header-search-wrap { position: relative; display: flex; align-items: center; }
+.header-search-icon { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 17px; padding: 5px 7px; border-radius: 7px; transition: .15s; display: flex; align-items: center; }
+.header-search-icon:hover { background: var(--border); color: var(--text); }
+.header-search-input {
+  background: var(--panel); border: 1px solid var(--border2); border-radius: 10px;
+  color: var(--text); font-size: 13px; padding: 7px 32px 7px 12px;
+  font-family: inherit; outline: none; transition: width .25s ease, opacity .2s;
+  width: 0; opacity: 0; pointer-events: none; position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+}
+.header-search-input.open {
+  width: 220px; opacity: 1; pointer-events: auto;
+}
+@media (max-width: 600px) {
+  .header-search-input.open { width: 160px; }
+}
+.header-search-input:focus { border-color: var(--accent2); }
+.header-search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text3); cursor: pointer; font-size: 13px; padding: 2px 4px; display: none; }
+.header-search-clear.show { display: block; }
+
+/* ===== フォーム折りたたみ ===== */
+.compose-toggle-btn {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  color: var(--text2); font-size: 13px; padding: 12px 16px; cursor: pointer;
+  font-family: inherit; transition: .15s; margin-bottom: 12px; text-align: left;
+}
+.compose-toggle-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,212,170,.05); }
+.compose-toggle-btn .ctb-plus { font-size: 18px; color: var(--accent); font-weight: 300; margin-right: 2px; }
+.compose-toggle-btn .ctb-label { flex: 1; }
+.compose-toggle-btn .ctb-type { font-size: 11px; font-family: monospace; background: rgba(0,212,170,.12); color: var(--accent); padding: 2px 8px; border-radius: 4px; }
+.compose-box.collapsed { display: none; }
+
+/* ===== カード左ボーダー（タイプ別） ===== */
+.memo-card[data-type="BUY"]      { border-left: 3px solid var(--green); }
+.memo-card[data-type="SELL"]     { border-left: 3px solid var(--red); }
+.memo-card[data-type="NEWS"]     { border-left: 3px solid var(--accent2); }
+.memo-card[data-type="MEMO"]     { border-left: 3px solid var(--yellow); }
+.memo-card[data-type="SCHEDULE"] { border-left: 3px solid #b47fff; }
 /* タグサジェスト */
 .tag-suggest-wrap { position: relative; }
 .tag-suggest-dropdown {
@@ -376,6 +416,14 @@ svg.price-chart{width:100%;overflow:visible;}
   </nav>
   <div class="header-right">
     <span id="sync-status" style="font-size:11px;color:var(--text3);"></span>
+    <div class="header-search-wrap">
+      <input type="text" class="header-search-input" id="header-search-input"
+        placeholder="メモを検索..." autocomplete="off"
+        oninput="onHeaderSearch(this.value)"
+        onkeydown="if(event.key==='Escape')closeHeaderSearch();">
+      <button class="header-search-clear" id="header-search-clear" onclick="clearHeaderSearch()">✕</button>
+      <button class="header-search-icon" id="header-search-icon" onclick="toggleHeaderSearch()" title="検索">🔍</button>
+    </div>
   </div>
 </header>
 
@@ -406,11 +454,13 @@ svg.price-chart{width:100%;overflow:visible;}
 
     <!-- FEED -->
     <div id="page-feed" class="page active">
-      <div class="search-wrap" style="margin-bottom:12px;">
-        <input type="text" id="search-input" class="search-input" placeholder="🔍 メモを検索..." oninput="onSearch(this.value)" onkeydown="if(event.key==='Escape'){clearSearch();}">
-        <button class="search-clear" id="search-clear" onclick="clearSearch()" style="display:none">✕</button>
-      </div>
-      <div class="compose-box">
+      <!-- 折りたたみトグルボタン -->
+      <button class="compose-toggle-btn" id="compose-toggle-btn" onclick="toggleComposeForm()">
+        <span class="ctb-plus">＋</span>
+        <span class="ctb-label">メモを書く</span>
+        <span class="ctb-type" id="ctb-type-label">MEMO</span>
+      </button>
+      <div class="compose-box collapsed" id="compose-box-wrap">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <div class="compose-label" style="margin-bottom:0;">// NEW MEMO</div>
           <div style="position:relative;">
@@ -938,6 +988,7 @@ function setType(btn, t) {
   btn.classList.add('active');
   const schedRow = document.getElementById('schedule-date-row');
   if (schedRow) schedRow.style.display = t === 'SCHEDULE' ? 'flex' : 'none';
+  updateToggleBtnType(t);
 }
 function toggleCatRow() {
   const row = document.getElementById('cat-row');
@@ -1026,6 +1077,10 @@ async function postMemo() {
   document.getElementById('compose-img-previews').innerHTML='';
   document.querySelectorAll('#cat-row .cat-chip').forEach(b=>b.classList.remove('active'));
   document.getElementById('cat-toggle-btn').textContent='📂 カテゴリを選択 ▼';
+  currentType = 'MEMO';
+  updateToggleBtnType('MEMO');
+  document.querySelectorAll('#type-btns .type-btn').forEach(b=>b.classList.toggle('active', b.textContent==='MEMO'));
+  collapseComposeForm();
   renderFeed(); renderTickers(); renderTags(); renderCalendar();
 }
 
@@ -1064,7 +1119,7 @@ function renderFeed() {
     );
   }
   const searchBar = searchQuery
-    ? `<div class="search-result-bar"><span>🔍 「${esc(searchQuery)}」の検索結果：${filtered.length}件</span><button onclick="clearSearch()" style="background:none;border:none;color:var(--accent2);cursor:pointer;font-size:12px;">✕ クリア</button></div>`
+    ? `<div class="search-result-bar"><span>🔍 「${esc(searchQuery)}」の検索結果：${filtered.length}件</span><button onclick="clearHeaderSearch()" style="background:none;border:none;color:var(--accent2);cursor:pointer;font-size:12px;">✕ クリア</button></div>`
     : '';
   if(!filtered.length) {
     list.innerHTML = searchBar + '<div class="empty"><span class="empty-icon">📋</span>' + (searchQuery ? '検索結果がありません' : 'まだメモがありません') + '</div>';
@@ -1091,7 +1146,7 @@ function renderCard(m, pfx='') {
     ? `<div style="font-size:15px;font-weight:700;color:#b47fff;margin-bottom:4px;">📅 ${esc(m.scheduleTitle)}</div>`
     : '';
   const typeLabel = m.type === 'SCHEDULE' ? '📅 予定' : m.type;
-  return `<div class="memo-card" id="card-${pfx}${m.id}">
+  return `<div class="memo-card" id="card-${pfx}${m.id}" data-type="${m.type}">
     <div class="memo-meta">
       <span class="memo-type ${m.type}" style="background:${tcBg};color:${tcFg}">${typeLabel}</span>
       <span class="memo-time">${formatTime(m.ts)}</span>
@@ -1757,18 +1812,80 @@ function selectScheduleDate(dateStr) {
 }
 let searchQuery = '';
 
-function onSearch(val) {
+// ===== ヘッダー検索 =====
+function toggleHeaderSearch() {
+  const input = document.getElementById('header-search-input');
+  const icon  = document.getElementById('header-search-icon');
+  const isOpen = input.classList.contains('open');
+  if (isOpen) {
+    closeHeaderSearch();
+  } else {
+    input.classList.add('open');
+    icon.style.color = 'var(--accent)';
+    setTimeout(() => input.focus(), 250);
+    showPage('feed', document.querySelector('.nav-btn'));
+  }
+}
+function onHeaderSearch(val) {
   searchQuery = val.trim();
-  document.getElementById('search-clear').style.display = searchQuery ? 'block' : 'none';
+  const clearBtn = document.getElementById('header-search-clear');
+  if (clearBtn) clearBtn.classList.toggle('show', !!searchQuery);
   renderFeed();
   if (searchQuery) showPage('feed', document.querySelector('.nav-btn'));
 }
-
-function clearSearch() {
-  document.getElementById('search-input').value = '';
+function clearHeaderSearch() {
+  const input = document.getElementById('header-search-input');
+  if (input) input.value = '';
   searchQuery = '';
-  document.getElementById('search-clear').style.display = 'none';
+  const clearBtn = document.getElementById('header-search-clear');
+  if (clearBtn) clearBtn.classList.remove('show');
   renderFeed();
+}
+function closeHeaderSearch() {
+  const input = document.getElementById('header-search-input');
+  const icon  = document.getElementById('header-search-icon');
+  if (input) { input.classList.remove('open'); input.value = ''; }
+  if (icon)  icon.style.color = '';
+  searchQuery = '';
+  const clearBtn = document.getElementById('header-search-clear');
+  if (clearBtn) clearBtn.classList.remove('show');
+  renderFeed();
+}
+// 旧検索バー用（互換性維持）
+function onSearch(val) { onHeaderSearch(val); }
+function clearSearch() { clearHeaderSearch(); }
+
+// ===== フォーム折りたたみ =====
+function toggleComposeForm() {
+  const box = document.getElementById('compose-box-wrap');
+  const btn = document.getElementById('compose-toggle-btn');
+  const isCollapsed = box.classList.contains('collapsed');
+  if (isCollapsed) {
+    box.classList.remove('collapsed');
+    btn.querySelector('.ctb-plus').textContent = '✕';
+    btn.querySelector('.ctb-label').textContent = 'フォームを閉じる';
+    setTimeout(() => document.getElementById('compose-text')?.focus(), 50);
+  } else {
+    box.classList.add('collapsed');
+    btn.querySelector('.ctb-plus').textContent = '＋';
+    btn.querySelector('.ctb-label').textContent = 'メモを書く';
+  }
+}
+function collapseComposeForm() {
+  const box = document.getElementById('compose-box-wrap');
+  const btn = document.getElementById('compose-toggle-btn');
+  if (box && !box.classList.contains('collapsed')) {
+    box.classList.add('collapsed');
+    if (btn) {
+      btn.querySelector('.ctb-plus').textContent = '＋';
+      btn.querySelector('.ctb-label').textContent = 'メモを書く';
+    }
+  }
+}
+// タイプ変更時にトグルボタンのラベルも更新
+function updateToggleBtnType(t) {
+  const label = document.getElementById('ctb-type-label');
+  if (label) label.textContent = t === 'SCHEDULE' ? '📅 予定' : t;
 }
 
 // ===== TEMPLATES =====
