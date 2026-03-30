@@ -120,6 +120,7 @@ input:focus{border-color:var(--accent2);}
 .memo-type.SELL{background:rgba(255,77,106,.15);color:var(--red);}
 .memo-type.MEMO{background:rgba(245,200,66,.12);color:var(--yellow);}
 .memo-type.SCHEDULE{background:rgba(160,100,255,.15);color:#b47fff;}
+.memo-type.PRIVATE{background:rgba(136,146,164,.15);color:#8892a4;}
 .memo-time{font-family:monospace;font-size:11px;color:var(--text3);}
 .ticker-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;}
 .ticker-tag{display:flex;align-items:center;gap:4px;background:rgba(0,153,255,.1);border-radius:5px;padding:3px 8px;cursor:pointer;transition:.15s;}
@@ -381,6 +382,7 @@ svg.price-chart{width:100%;overflow:visible;}
 .memo-card[data-type="NEWS"]     { border-left: 3px solid var(--accent2); }
 .memo-card[data-type="MEMO"]     { border-left: 3px solid var(--yellow); }
 .memo-card[data-type="SCHEDULE"] { border-left: 3px solid #b47fff; }
+.memo-card[data-type="PRIVATE"]  { border-left: 3px solid #8892a4; }
 /* タグサジェスト */
 .tag-suggest-wrap { position: relative; }
 .tag-suggest-dropdown {
@@ -483,6 +485,7 @@ svg.price-chart{width:100%;overflow:visible;}
             <button class="type-btn" onclick="setType(this,'BUY')">BUY</button>
             <button class="type-btn" onclick="setType(this,'SELL')">SELL</button>
             <button class="type-btn" onclick="setType(this,'SCHEDULE')" style="border-color:#6a3fa0;color:#b47fff;">📅 予定</button>
+            <button class="type-btn" onclick="setType(this,'PRIVATE')" style="border-color:#4a5568;color:#8892a4;">🔒 PRIVATE</button>
           </div>
           <button class="post-btn" onclick="postMemo()">投稿</button>
         </div>
@@ -551,6 +554,7 @@ svg.price-chart{width:100%;overflow:visible;}
         <div class="filter-chip" onclick="setFilter(this,'SELL')">SELL</div>
         <div class="filter-chip" onclick="setFilter(this,'MEMO')">MEMO</div>
         <div class="filter-chip" onclick="setFilter(this,'SCHEDULE')" style="color:#b47fff;">📅 予定</div>
+        <div class="filter-chip" onclick="setFilter(this,'PRIVATE')" style="color:#8892a4;">🔒 PRIVATE</div>
       </div>
       <div id="tag-filter-active" style="display:none;" class="tag-filter-bar">
         <span id="tag-filter-label"></span>
@@ -582,6 +586,7 @@ svg.price-chart{width:100%;overflow:visible;}
         <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--accent2)"></div>NEWS</div>
         <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--yellow)"></div>MEMO</div>
         <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#b47fff"></div>予定</div>
+        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#8892a4"></div>PRIVATE</div>
       </div>
     </div>
 
@@ -693,6 +698,7 @@ svg.price-chart{width:100%;overflow:visible;}
             <button class="type-btn BUY" onclick="setDayType(this,'BUY')">BUY</button>
             <button class="type-btn SELL" onclick="setDayType(this,'SELL')">SELL</button>
             <button class="type-btn" onclick="setDayType(this,'SCHEDULE')" style="border-color:#6a3fa0;color:#b47fff;">📅 予定</button>
+            <button class="type-btn" onclick="setDayType(this,'PRIVATE')" style="border-color:#4a5568;color:#8892a4;">🔒 PRIVATE</button>
           </div>
           <button class="post-btn" style="margin-left:auto" onclick="postDayMemo()">投稿</button>
         </div>
@@ -726,6 +732,8 @@ svg.price-chart{width:100%;overflow:visible;}
         <button class="type-btn" onclick="setEditType(this,'NEWS')">NEWS</button>
         <button class="type-btn" onclick="setEditType(this,'BUY')">BUY</button>
         <button class="type-btn" onclick="setEditType(this,'SELL')">SELL</button>
+        <button class="type-btn" onclick="setEditType(this,'SCHEDULE')" style="border-color:#6a3fa0;color:#b47fff;">📅 予定</button>
+        <button class="type-btn" onclick="setEditType(this,'PRIVATE')" style="border-color:#4a5568;color:#8892a4;">🔒 PRIVATE</button>
       </div>
 
       <label class="edit-label">カテゴリ</label>
@@ -871,12 +879,9 @@ function parseTickers(str) { return str.split(',').map(s=>s.trim().replace(/^\$/
 // 本文中の銘柄コードを抽出（$7203 または 銘柄DB登録済みの4桁）
 function parseBodyTickers(text) {
   const codes = new Set();
-  // $1234 形式は無条件で抽出
+  // $1234 形式のみ抽出（$なし4桁は拾わない）
   const dollarMatches = text.match(/\$([0-9]{4})(?![0-9])/g) || [];
   dollarMatches.forEach(m => codes.add(m.replace('$', '')));
-  // 銘柄DB登録済みの4桁数字（前後に数字がないもの）
-  const tokens = text.split(/[^0-9]/);
-  tokens.forEach(t => { if (/^[0-9]{4}$/.test(t) && getTickerName(t)) codes.add(t); });
   return [...codes];
 }
 
@@ -1130,7 +1135,7 @@ function renderFeed() {
 }
 
 function renderCard(m, pfx='') {
-  const tc = {NEWS:'rgba(0,153,255,.15)|#0099ff',BUY:'rgba(0,212,170,.15)|#00d4aa',SELL:'rgba(255,77,106,.15)|#ff4d6a',MEMO:'rgba(245,200,66,.12)|#f5c842',SCHEDULE:'rgba(160,100,255,.15)|#b47fff'}[m.type]||'rgba(245,200,66,.12)|#f5c842';
+  const tc = {NEWS:'rgba(0,153,255,.15)|#0099ff',BUY:'rgba(0,212,170,.15)|#00d4aa',SELL:'rgba(255,77,106,.15)|#ff4d6a',MEMO:'rgba(245,200,66,.12)|#f5c842',SCHEDULE:'rgba(160,100,255,.15)|#b47fff',PRIVATE:'rgba(136,146,164,.15)|#8892a4'}[m.type]||'rgba(245,200,66,.12)|#f5c842';
   const [tcBg,tcFg] = tc.split('|');
   const tickerHtml = (m.tickers||[]).map(t=>{
     const n=getTickerName(t);
@@ -1145,7 +1150,7 @@ function renderCard(m, pfx='') {
   const scheduleTitleHtml = m.type === 'SCHEDULE' && m.scheduleTitle
     ? `<div style="font-size:15px;font-weight:700;color:#b47fff;margin-bottom:4px;">📅 ${esc(m.scheduleTitle)}</div>`
     : '';
-  const typeLabel = m.type === 'SCHEDULE' ? '📅 予定' : m.type;
+  const typeLabel = m.type === 'SCHEDULE' ? '📅 予定' : m.type === 'PRIVATE' ? '🔒 PRIVATE' : m.type;
   return `<div class="memo-card" id="card-${pfx}${m.id}" data-type="${m.type}">
     <div class="memo-meta">
       <span class="memo-type ${m.type}" style="background:${tcBg};color:${tcFg}">${typeLabel}</span>
@@ -1175,31 +1180,32 @@ function renderCard(m, pfx='') {
 }
 
 function renderBody(text) {
-  // テキストをトークンに分割して順番に処理（二重処理防止）
   const result = [];
-  // $XXXX または 4桁数字 のパターンで分割
-  const pattern = /(\$[0-9]{4})(?![0-9])|([0-9]{4})(?![0-9])/g;
+  // URL（http/https）または $XXXX形式の銘柄コードにマッチ
+  const pattern = /(https?:\/\/[^\s\u3000-\u9fff\uff00-\uffef<>"]+)|(\$[0-9]{4})(?![0-9])/g;
   let lastIndex = 0;
   let match;
   while ((match = pattern.exec(text)) !== null) {
-    // マッチ前のテキストをそのままエスケープして追加
     if (match.index > lastIndex) {
       result.push(esc(text.slice(lastIndex, match.index)));
     }
-    const withDollar = match[1]; // $7203 形式
-    const bare = match[2];       // 7203 形式
-    const code = withDollar ? withDollar.slice(1) : bare;
-    const name = getTickerName(code);
-    if (withDollar || name) {
-      const label = withDollar ? `$${code}` : code;
+    if (match[1]) {
+      // URL → ハイパーリンク
+      const url = match[1];
+      // 末尾の句読点は除外
+      const cleaned = url.replace(/[。、.,!?）)」』]+$/, '');
+      const trail = url.slice(cleaned.length);
+      const display = cleaned.length > 50 ? cleaned.slice(0, 50) + '…' : cleaned;
+      result.push(`<a href="${esc(cleaned)}" target="_blank" rel="noopener" style="color:var(--accent2);text-decoration:underline;text-underline-offset:2px;word-break:break-all;">${esc(display)}</a>${esc(trail)}`);
+    } else if (match[2]) {
+      // $7203 形式 → 銘柄リンク＋銘柄名
+      const code = match[2].slice(1);
+      const name = getTickerName(code);
       const namePart = name ? ` <span style="font-size:11px;color:var(--text3);">${esc(name)}</span>` : '';
-      result.push(`<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">${label}</span>${namePart}`);
-    } else {
-      result.push(esc(match[0]));
+      result.push(`<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">$${code}</span>${namePart}`);
     }
     lastIndex = match.index + match[0].length;
   }
-  // 残りのテキスト
   if (lastIndex < text.length) {
     result.push(esc(text.slice(lastIndex)));
   }
@@ -1474,7 +1480,8 @@ function renderCalendar() {
     const hasNews=dayMemos.some(m=>m.type==='NEWS');
     const hasMemo=dayMemos.some(m=>m.type==='MEMO');
     const hasSched=dayMemos.some(m=>m.type==='SCHEDULE');
-    const dotHtml=[hasBuy&&'#00d4aa',hasSell&&'#ff4d6a',hasNews&&'#0099ff',(!hasBuy&&!hasSell&&!hasNews&&!hasSched&&dayMemos.length)&&'#f5c842',hasSched&&'#b47fff'].filter(Boolean).map(c=>`<div class="cal-dot" style="background:${c}"></div>`).join('');
+    const hasPrivate=dayMemos.some(m=>m.type==='PRIVATE');
+    const dotHtml=[hasBuy&&'#00d4aa',hasSell&&'#ff4d6a',hasNews&&'#0099ff',(!hasBuy&&!hasSell&&!hasNews&&!hasSched&&!hasPrivate&&dayMemos.length)&&'#f5c842',hasSched&&'#b47fff',hasPrivate&&'#8892a4'].filter(Boolean).map(c=>`<div class="cal-dot" style="background:${c}"></div>`).join('');
     const cls=['cal-day',isToday?'today':'',dayMemos.length?'has-memo':'',dow===0&&!isToday?'sun':'',dow===6&&!isToday?'sat':''].filter(Boolean).join(' ');
     const click=`onclick="openDayModal('${dateKey}')"`;
     html+=`<div class="${cls}" ${click} style="cursor:pointer"><div class="cal-day-num">${day}</div>${dotHtml?`<div class="cal-dots">${dotHtml}</div>`:''} ${dayMemos.length?`<div class="cal-count">${dayMemos.length}件</div>`:''}</div>`;
@@ -1885,7 +1892,7 @@ function collapseComposeForm() {
 // タイプ変更時にトグルボタンのラベルも更新
 function updateToggleBtnType(t) {
   const label = document.getElementById('ctb-type-label');
-  if (label) label.textContent = t === 'SCHEDULE' ? '📅 予定' : t;
+  if (label) label.textContent = t === 'SCHEDULE' ? '📅 予定' : t === 'PRIVATE' ? '🔒 PRIVATE' : t;
 }
 
 // ===== TEMPLATES =====
