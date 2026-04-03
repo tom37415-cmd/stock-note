@@ -879,9 +879,9 @@ function parseTickers(str) { return str.split(',').map(s=>s.trim().replace(/^\$/
 // 本文中の銘柄コードを抽出（$7203 または 銘柄DB登録済みの4桁）
 function parseBodyTickers(text) {
   const codes = new Set();
-  // $1234 形式のみ抽出（$なし4桁は拾わない）
-  const dollarMatches = text.match(/\$([0-9]{4})(?![0-9])/g) || [];
-  dollarMatches.forEach(m => codes.add(m.replace('$', '')));
+  // $7203 や $NVDA など英数字の銘柄コードを抽出
+  const dollarMatches = text.match(/\$([A-Z0-9]{1,6})(?![A-Z0-9])/gi) || [];
+  dollarMatches.forEach(m => codes.add(m.replace('$', '').toUpperCase()));
   return [...codes];
 }
 
@@ -1181,8 +1181,8 @@ function renderCard(m, pfx='') {
 
 function renderBody(text) {
   const result = [];
-  // URL（http/https）または $XXXX形式の銘柄コードにマッチ
-  const pattern = /(https?:\/\/[^\s\u3000-\u9fff\uff00-\uffef<>"]+)|(\$[0-9]{4})(?![0-9])/g;
+  // URL（http/https）または $XXXX形式の銘柄コードにマッチ（英数字1〜6文字）
+  const pattern = /(https?:\/\/[^\s\u3000-\u9fff\uff00-\uffef<>"]+)|(\$[A-Z0-9]{1,6})(?![A-Z0-9])/gi;
   let lastIndex = 0;
   let match;
   while ((match = pattern.exec(text)) !== null) {
@@ -1198,8 +1198,8 @@ function renderBody(text) {
       const display = cleaned.length > 50 ? cleaned.slice(0, 50) + '…' : cleaned;
       result.push(`<a href="${esc(cleaned)}" target="_blank" rel="noopener" style="color:var(--accent2);text-decoration:underline;text-underline-offset:2px;word-break:break-all;">${esc(display)}</a>${esc(trail)}`);
     } else if (match[2]) {
-      // $7203 形式 → 銘柄リンク＋銘柄名
-      const code = match[2].slice(1);
+      // $7203 / $NVDA 形式 → 銘柄リンク＋銘柄名
+      const code = match[2].slice(1).toUpperCase();
       const name = getTickerName(code);
       const namePart = name ? ` <span style="font-size:11px;color:var(--text3);">${esc(name)}</span>` : '';
       result.push(`<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">$${code}</span>${namePart}`);
