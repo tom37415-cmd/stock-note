@@ -341,7 +341,14 @@ svg.price-chart{width:100%;overflow:visible;}
 
 /* ボトムナビはデスクトップでは非表示 */
 .bottom-nav { display: none; }
-/* タグサジェスト */
+/* 銘柄☆評価 */
+.ticker-stars { display:flex; gap:2px; margin-top:6px; }
+.ticker-star { font-size:14px; cursor:pointer; line-height:1; transition:.1s; user-select:none; }
+.ticker-star:hover { transform:scale(1.2); }
+.ticker-sort-bar { display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+.ticker-sort-btn { background:var(--bg3); border:1px solid var(--border2); color:var(--text3); border-radius:6px; padding:4px 10px; font-size:11px; cursor:pointer; transition:.15s; }
+.ticker-sort-btn.active { background:rgba(0,212,170,.12); border-color:var(--accent); color:var(--accent); }
+
 .tag-suggest-wrap { position: relative; }
 .tag-suggest-dropdown {
   position: absolute; left: 0; top: calc(100% + 4px);
@@ -541,6 +548,12 @@ svg.price-chart{width:100%;overflow:visible;}
       <div class="search-wrap" style="margin-bottom:12px;">
         <input type="text" id="ticker-search-input" class="search-input" placeholder="🔍 銘柄コード・銘柄名で検索..." oninput="renderTickers()" autocomplete="off">
         <button class="search-clear" id="ticker-search-clear" onclick="clearTickerSearch()" style="display:none;">✕</button>
+      </div>
+      <div class="ticker-sort-bar">
+        <span style="font-size:11px;color:var(--text3);">並び替え：</span>
+        <button class="ticker-sort-btn active" onclick="setTickerSort('code',this)">コード順</button>
+        <button class="ticker-sort-btn" onclick="setTickerSort('star',this)">⭐️ 注目度順</button>
+        <button class="ticker-sort-btn" onclick="setTickerSort('count',this)">メモ数順</button>
       </div>
       <div id="ticker-search-result-bar" style="display:none;font-size:12px;color:var(--text3);margin-bottom:8px;"></div>
       <div class="ticker-grid" id="ticker-grid"></div>
@@ -917,7 +930,7 @@ function save() { saveToSupabase(); }
 // ===== INIT =====
 async function init() {
   setSyncStatus('syncing');
-  await Promise.all([loadFromSupabase(), loadLinks(), loadJPXTickers(), loadTemplates()]);
+  await Promise.all([loadFromSupabase(), loadLinks(), loadJPXTickers(), loadTemplates(), loadTickerStarsFromSupabase()]);
   renderFeed(); renderTickers(); renderTags(); renderCalendar();
 }
 
@@ -1253,6 +1266,56 @@ function closeEditModal() {
 }
 function editOverlayBgClose(e) { if(e.target===document.getElementById('edit-overlay')) closeEditModal(); }
 
+// ===== TICKER STARS =====
+const STARS_KEY = 'sn_ticker_stars_v1';
+let tickerStars = {};
+let tickerSortMode = 'code';
+
+function loadTickerStars() {
+  try { tickerStars = JSON.parse(localStorage.getItem(STARS_KEY) || '{}'); } catch { tickerStars = {}; }
+}
+
+function saveTickerStars() {
+  localStorage.setItem(STARS_KEY, JSON.stringify(tickerStars));
+  // Supabaseにも同期
+  (async () => {
+    try {
+      const existing = await fetch(`${SB_URL}/rest/v1/memos?id=eq.stocknote_stars`, { headers: SB_HEADERS }).then(r=>r.json());
+      const payload = { id: 'stocknote_stars', data: { stars: tickerStars } };
+      const url = existing.length > 0 ? `${SB_URL}/rest/v1/memos?id=eq.stocknote_stars` : `${SB_URL}/rest/v1/memos`;
+      await fetch(url, { method: existing.length > 0 ? 'PATCH' : 'POST', headers: SB_HEADERS, body: JSON.stringify(payload) });
+    } catch {}
+  })();
+}
+
+async function loadTickerStarsFromSupabase() {
+  const raw = localStorage.getItem(STARS_KEY);
+  if (raw) { try { tickerStars = JSON.parse(raw); return; } catch {} }
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/memos?id=eq.stocknote_stars`, { headers: SB_HEADERS });
+    const rows = await res.json();
+    if (rows.length && rows[0].data?.stars) {
+      tickerStars = rows[0].data.stars;
+      localStorage.setItem(STARS_KEY, JSON.stringify(tickerStars));
+    }
+  } catch {}
+}
+
+function setTickerStar(code, star, e) {
+  e.stopPropagation();
+  // 同じ星をクリックしたらリセット
+  tickerStars[code] = tickerStars[code] === star ? 0 : star;
+  saveTickerStars();
+  renderTickers();
+}
+
+function setTickerSort(mode, btn) {
+  tickerSortMode = mode;
+  document.querySelectorAll('.ticker-sort-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTickers();
+}
+
 // ===== TICKERS =====
 function renderTickers() {
   const map = {};
@@ -1271,12 +1334,20 @@ function renderTickers() {
   const resultBar = document.getElementById('ticker-search-result-bar');
   if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
 
-  let keys = Object.keys(map).sort();
+  let keys = Object.keys(map);
   if (q) {
     keys = keys.filter(t => {
       const name = (getTickerName(t) || '').toLowerCase();
       return t.toLowerCase().includes(q) || name.includes(q);
     });
+  }
+  // ソート
+  if (tickerSortMode === 'star') {
+    keys.sort((a, b) => (tickerStars[b] || 0) - (tickerStars[a] || 0) || a.localeCompare(b));
+  } else if (tickerSortMode === 'count') {
+    keys.sort((a, b) => (map[b]?.length || 0) - (map[a]?.length || 0) || a.localeCompare(b));
+  } else {
+    keys.sort();
   }
 
   if (resultBar) {
@@ -1297,9 +1368,16 @@ function renderTickers() {
   grid.innerHTML = keys.map(t=>{
     const ms=map[t], name=getTickerName(t);
     const hasBuy=ms.some(m=>m.type==='BUY'), hasSell=ms.some(m=>m.type==='SELL');
+    const star = tickerStars[t] || 0;
+    const starsHtml = [1,2,3,4,5].map(i =>
+      `<span class="ticker-star" onclick="setTickerStar('${t}',${i},event)" title="${i}つ星">${i <= star ? '⭐' : '☆'}</span>`
+    ).join('');
     return `<div class="ticker-card" onclick="openTicker('${t}')">
-      <div class="ticker-card-code">$${t}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div class="ticker-card-code">$${t}</div>
+      </div>
       ${name?`<div class="ticker-card-name">${esc(name)}</div>`:''}
+      <div class="ticker-stars">${starsHtml}</div>
       <div class="ticker-card-count">${ms.length}件のメモ</div>
       <div class="ticker-badges">
         ${hasBuy?'<span class="ticker-badge buy">BUY</span>':''}
