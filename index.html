@@ -1133,31 +1133,37 @@ function renderCard(m, pfx='') {
 }
 
 function renderBody(text) {
-  // テキストをトークンに分割して順番に処理（二重処理防止）
   const result = [];
-  // $XXXX または 4桁数字 のパターンで分割
-  const pattern = /(\$[0-9]{4})(?![0-9])|([0-9]{4})(?![0-9])/g;
+  // URL・$XXXX・4桁数字を一括検出
+  const pattern = /(https?:\/\/[^\s\u3000-\u9fff\uff00-\uffef<>"]+)|(\$[0-9]{4})(?![0-9])|([0-9]{4})(?![0-9])/g;
   let lastIndex = 0;
   let match;
   while ((match = pattern.exec(text)) !== null) {
-    // マッチ前のテキストをそのままエスケープして追加
     if (match.index > lastIndex) {
       result.push(esc(text.slice(lastIndex, match.index)));
     }
-    const withDollar = match[1]; // $7203 形式
-    const bare = match[2];       // 7203 形式
-    const code = withDollar ? withDollar.slice(1) : bare;
-    const name = getTickerName(code);
-    if (withDollar || name) {
-      const label = withDollar ? `$${code}` : code;
-      const namePart = name ? ` <span style="font-size:11px;color:var(--text);font-weight:500;opacity:.8;">${esc(name)}</span>` : '';
-      result.push(`<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">${label}</span>${namePart}`);
+    const url     = match[1];
+    const withDollar = match[2];
+    const bare    = match[3];
+
+    if (url) {
+      // URLはハイパーリンクに
+      const display = url.length > 50 ? url.slice(0, 47) + '…' : url;
+      result.push(`<a href="${esc(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent2);text-decoration:underline;text-underline-offset:2px;word-break:break-all;">${esc(display)}</a>`);
     } else {
-      result.push(esc(match[0]));
+      // 銘柄コード処理
+      const code = withDollar ? withDollar.slice(1) : bare;
+      const name = getTickerName(code);
+      if (withDollar || name) {
+        const label = withDollar ? `$${code}` : code;
+        const namePart = name ? ` <span style="font-size:11px;color:var(--text);font-weight:500;opacity:.8;">${esc(name)}</span>` : '';
+        result.push(`<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">${label}</span>${namePart}`);
+      } else {
+        result.push(esc(match[0]));
+      }
     }
     lastIndex = match.index + match[0].length;
   }
-  // 残りのテキスト
   if (lastIndex < text.length) {
     result.push(esc(text.slice(lastIndex)));
   }
