@@ -341,6 +341,14 @@ svg.price-chart{width:100%;overflow:visible;}
 
 /* ボトムナビはデスクトップでは非表示 */
 .bottom-nav { display: none; }
+/* あとで読む */
+.readlater-btn { background:none; border:none; cursor:pointer; font-size:14px; padding:4px 6px; border-radius:5px; transition:.15s; flex-shrink:0; color:var(--text3); }
+.readlater-btn:hover { background:rgba(245,200,66,.15); }
+.readlater-btn.marked { color:#f5c842; }
+.read-btn { background:none; border:none; cursor:pointer; font-size:12px; padding:3px 8px; border-radius:5px; transition:.15s; color:var(--text3); border:1px solid var(--border2); }
+.read-btn:hover { border-color:var(--accent); color:var(--accent); }
+.read-btn.done { color:var(--accent); border-color:var(--accent); background:rgba(0,212,170,.1); }
+.memo-card.read-done { opacity:.55; }
 /* 銘柄☆評価 */
 .ticker-stars { display:flex; gap:2px; margin-top:6px; }
 .ticker-star { font-size:14px; cursor:pointer; line-height:1; transition:.1s; user-select:none; }
@@ -508,6 +516,7 @@ svg.price-chart{width:100%;overflow:visible;}
         <div class="filter-chip" onclick="setFilter(this,'SELL')">SELL</div>
         <div class="filter-chip" onclick="setFilter(this,'MEMO')">MEMO</div>
         <div class="filter-chip" onclick="setFilter(this,'SCHEDULE')" style="color:#b47fff;">📅 予定</div>
+        <div class="filter-chip" onclick="setFilter(this,'READLATER')" style="color:#f5c842;">🔖 あとで読む</div>
       </div>
       <div id="tag-filter-active" style="display:none;" class="tag-filter-bar">
         <span id="tag-filter-label"></span>
@@ -834,8 +843,9 @@ function parseTickers(str) { return str.split(',').map(s=>s.trim().replace(/^\$/
 // 本文中の銘柄コードを抽出（$7203 形式のみ）
 function parseBodyTickers(text) {
   const codes = new Set();
-  const dollarMatches = text.match(/\$([0-9]{4})(?![0-9])/g) || [];
-  dollarMatches.forEach(m => codes.add(m.replace('$', '')));
+  // $7203（日本株4桁）または $NVDA（米国株アルファベット）
+  const matches = text.match(/\$([A-Z]{1,5}|[0-9]{4})(?![0-9A-Z])/g) || [];
+  matches.forEach(m => codes.add(m.replace('$', '').toUpperCase()));
   return [...codes];
 }
 
@@ -926,6 +936,7 @@ function save() { saveToSupabase(); }
 // ===== INIT =====
 async function init() {
   setSyncStatus('syncing');
+  loadReadLater();
   await Promise.all([loadFromSupabase(), loadLinks(), loadJPXTickers(), loadTemplates(), loadTickerStarsFromSupabase()]);
   renderFeed(); renderTickers(); renderTags(); renderCalendar();
 }
@@ -1060,7 +1071,9 @@ function clearTagFilter() { setTagFilter(null); }
 // ===== RENDER FEED =====
 function renderFeed() {
   const list = document.getElementById('memo-list');
-  let filtered = currentFilter==='ALL' ? [...memos] : memos.filter(m=>m.type===currentFilter);
+  let filtered = currentFilter==='ALL' ? [...memos]
+    : currentFilter==='READLATER' ? memos.filter(m=>readLaterMemos.has(m.id))
+    : memos.filter(m=>m.type===currentFilter);
   if(currentTagFilter) filtered = filtered.filter(m=>(m.tags||[]).includes(currentTagFilter)||(m.categories||[]).includes(currentTagFilter));
   if(searchQuery) {
     const q = searchQuery.toLowerCase();
@@ -1113,7 +1126,7 @@ function renderCard(m, pfx='') {
     ? `<div style="font-size:15px;font-weight:700;color:#b47fff;margin-bottom:4px;">📅 ${esc(m.scheduleTitle)}</div>`
     : '';
   const typeLabel = m.type === 'SCHEDULE' ? '📅 予定' : m.type;
-  return `<div class="memo-card" id="card-${pfx}${m.id}">
+  return `<div class="memo-card ${readDoneMemos.has(m.id)?'read-done':''}" id="card-${pfx}${m.id}">
     <div class="memo-meta">
       <span class="memo-type ${m.type}" style="background:${tcBg};color:${tcFg}">${typeLabel}</span>
       <span class="memo-time">${formatTime(m.ts)}</span>
@@ -1135,7 +1148,9 @@ function renderCard(m, pfx='') {
     </div>
     <div class="memo-actions">
       <button class="action-btn reply" onclick="toggleReply('${pfx}${m.id}')">💬 ツリー${(m.replies||[]).length>0?` (${m.replies.length})`:''}</button>
-      <button class="action-btn edit" onclick="openEditModal('${m.id}')">✏️ 編集</button>
+      <button class="readlater-btn ${readLaterMemos.has(m.id)?'marked':''}" onclick="toggleReadLater('${m.id}',event)" title="あとで読む">🔖</button>
+      ${readLaterMemos.has(m.id)?`<button class="read-btn ${readDoneMemos.has(m.id)?'done':''}" onclick="toggleReadDone('${m.id}',event)">${readDoneMemos.has(m.id)?'✅ 既読':'既読にする'}</button>`:''}
+      <button class="action-btn edit" onclick="openEditModal('${m.id}')" style="margin-left:auto;">✏️ 編集</button>
       <button class="action-btn del" onclick="deleteMemo('${m.id}')">🗑 削除</button>
     </div>
   </div>`;
@@ -1143,29 +1158,28 @@ function renderCard(m, pfx='') {
 
 function renderBody(text) {
   const result = [];
-  // URL・$XXXX・4桁数字を一括検出
-  const pattern = /(https?:\/\/[^\s\u3000-\u9fff\uff00-\uffef<>"]+)|(\$[0-9]{4})(?![0-9])|([0-9]{4})(?![0-9])/g;
+  // URL・$XXXX（日本株）・$NVDA（米国株）・4桁数字を一括検出
+  const pattern = /(https?:\/\/[^\s\u3000-\u9fff\uff00-\uffef<>"]+)|(\$(?:[A-Z]{1,5}|[0-9]{4}))(?![0-9A-Z])|([0-9]{4})(?![0-9])/g;
   let lastIndex = 0;
   let match;
   while ((match = pattern.exec(text)) !== null) {
     if (match.index > lastIndex) {
       result.push(esc(text.slice(lastIndex, match.index)));
     }
-    const url      = match[1];
-    const withDollar = match[2]; // $7203 形式
-    const bare     = match[3];   // 7203 形式（銘柄名表示なし）
+    const url        = match[1];
+    const withDollar = match[2]; // $7203 or $NVDA
+    const bare       = match[3]; // 4桁数字のみ（銘柄名表示なし）
 
     if (url) {
       const display = url.length > 50 ? url.slice(0, 47) + '…' : url;
       result.push(`<a href="${esc(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent2);text-decoration:underline;text-underline-offset:2px;word-break:break-all;">${esc(display)}</a>`);
     } else if (withDollar) {
-      // $付きのみ銘柄名を表示
-      const code = withDollar.slice(1);
+      const code = withDollar.slice(1).toUpperCase();
       const name = getTickerName(code);
       const namePart = name ? ` <span style="font-size:11px;color:var(--text);font-weight:500;opacity:.8;">${esc(name)}</span>` : '';
       result.push(`<span onclick="openTicker('${code}')" style="color:var(--accent2);cursor:pointer;font-weight:600;border-bottom:1px dashed rgba(0,153,255,.4);padding-bottom:1px;">$${code}</span>${namePart}`);
     } else {
-      // $なしの4桁数字はそのまま表示（銘柄名表示・リンクなし）
+      // $なしの4桁数字はそのまま表示
       result.push(esc(bare));
     }
     lastIndex = match.index + match[0].length;
@@ -1336,6 +1350,44 @@ function closeEditModal() {
   editingId = null;
 }
 function editOverlayBgClose(e) { if(e.target===document.getElementById('edit-overlay')) closeEditModal(); }
+
+// ===== あとで読む =====
+const READLATER_KEY = 'sn_readlater_v1';
+const READDONE_KEY  = 'sn_readdone_v1';
+let readLaterMemos = new Set();
+let readDoneMemos  = new Set();
+
+function loadReadLater() {
+  try { readLaterMemos = new Set(JSON.parse(localStorage.getItem(READLATER_KEY) || '[]')); } catch { readLaterMemos = new Set(); }
+  try { readDoneMemos  = new Set(JSON.parse(localStorage.getItem(READDONE_KEY)  || '[]')); } catch { readDoneMemos  = new Set(); }
+}
+function saveReadLater() {
+  localStorage.setItem(READLATER_KEY, JSON.stringify([...readLaterMemos]));
+  localStorage.setItem(READDONE_KEY,  JSON.stringify([...readDoneMemos]));
+}
+function toggleReadLater(id, e) {
+  e.stopPropagation();
+  if (readLaterMemos.has(id)) {
+    readLaterMemos.delete(id);
+    readDoneMemos.delete(id);
+    showToast('🔖 あとで読むを解除しました');
+  } else {
+    readLaterMemos.add(id);
+    showToast('🔖 あとで読むに追加しました');
+  }
+  saveReadLater(); renderFeed();
+}
+function toggleReadDone(id, e) {
+  e.stopPropagation();
+  if (readDoneMemos.has(id)) {
+    readDoneMemos.delete(id);
+    showToast('↩️ 未読に戻しました');
+  } else {
+    readDoneMemos.add(id);
+    showToast('✅ 既読にしました');
+  }
+  saveReadLater(); renderFeed();
+}
 
 // ===== TICKER STARS =====
 const STARS_KEY = 'sn_ticker_stars_v1';
