@@ -1252,6 +1252,7 @@ function deleteReply(memoId, replyId, e) {
   showToast('🗑 ツリーメモを削除しました');
 }
 
+function toggleReply(pfxId) {
   const el = document.getElementById('rc-'+pfxId);
   el.classList.toggle('open');
   if(el.classList.contains('open')) document.getElementById('rt-'+pfxId).focus();
