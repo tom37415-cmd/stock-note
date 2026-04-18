@@ -522,6 +522,10 @@ svg.price-chart{width:100%;overflow:visible;}
         <span id="tag-filter-label"></span>
         <button onclick="clearTagFilter()">✕</button>
       </div>
+      <div id="ticker-filter-active" style="display:none;" class="tag-filter-bar">
+        <span id="ticker-filter-label"></span>
+        <button onclick="clearTickerFilter()">✕</button>
+      </div>
       <div id="memo-list"></div>
     </div>
 
@@ -630,6 +634,10 @@ svg.price-chart{width:100%;overflow:visible;}
         <div class="overlay-sub-name" id="ov-ticker-name"></div>
       </div>
       <span class="overlay-count" id="ov-ticker-count"></span>
+      <button id="ov-feed-link-btn" onclick="openTickerFeed()" title="フィードで絞り込み表示"
+        style="background:rgba(0,153,255,.12);border:1px solid rgba(0,153,255,.35);color:var(--accent2);border-radius:7px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-right:8px;white-space:nowrap;">
+        📋 フィードで見る
+      </button>
       <button class="close-btn" onclick="closeOverlay('ticker-overlay')">✕</button>
     </div>
     <div class="overlay-body">
@@ -829,6 +837,7 @@ const CATEGORIES = ['決算','材料','マクロ','テクニカル','配当','IP
 let memos = [];
 let currentFilter = 'ALL';
 let currentTagFilter = null;
+let currentTickerFilter = null;
 let currentType = 'MEMO';
 let selectedCats = [];
 let editingId = null;
@@ -1067,6 +1076,31 @@ function setTagFilter(tag) {
 }
 function clearTagFilter() { setTagFilter(null); }
 
+// 銘柄フィルター
+let _currentTickerFilterCode = null;
+function openTickerFeed() {
+  const code = _currentTickerFilterCode;
+  if (!code) return;
+  closeOverlay('ticker-overlay');
+  currentTickerFilter = code;
+  // フィードページに切り替え
+  showPage('feed', document.querySelector('.nav-btn'));
+  // バナー表示
+  const bar = document.getElementById('ticker-filter-active');
+  const label = document.getElementById('ticker-filter-label');
+  if (bar) bar.style.display = 'flex';
+  if (label) label.textContent = `$${code}${getTickerName(code) ? ' ' + getTickerName(code) : ''} のメモ`;
+  renderFeed();
+}
+function clearTickerFilter() {
+  currentTickerFilter = null;
+  _currentTickerFilterCode = null;
+  const bar = document.getElementById('ticker-filter-active');
+  if (bar) bar.style.display = 'none';
+  renderFeed();
+}
+
+
 // ===== RENDER FEED =====
 function renderFeed() {
   const list = document.getElementById('memo-list');
@@ -1074,6 +1108,10 @@ function renderFeed() {
     : currentFilter==='READLATER' ? memos.filter(m=>readLaterMemos.has(m.id))
     : memos.filter(m=>m.type===currentFilter);
   if(currentTagFilter) filtered = filtered.filter(m=>(m.tags||[]).includes(currentTagFilter)||(m.categories||[]).includes(currentTagFilter));
+  if(currentTickerFilter) filtered = filtered.filter(m=>
+    (m.tickers||[]).includes(currentTickerFilter) ||
+    parseBodyTickers(m.text||'').includes(currentTickerFilter)
+  );
   if(searchQuery) {
     const q = searchQuery.toLowerCase();
     filtered = filtered.filter(m =>
@@ -1543,6 +1581,7 @@ function clearTickerSearch() {
   renderTickers();
 }
 function openTicker(ticker) {
+  _currentTickerFilterCode = ticker;
   const ms = memos.filter(m =>
     (m.tickers||[]).includes(ticker) ||
     parseBodyTickers(m.text||'').includes(ticker)
