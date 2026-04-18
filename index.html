@@ -936,8 +936,7 @@ function save() { saveToSupabase(); }
 // ===== INIT =====
 async function init() {
   setSyncStatus('syncing');
-  loadReadLater();
-  await Promise.all([loadFromSupabase(), loadLinks(), loadJPXTickers(), loadTemplates(), loadTickerStarsFromSupabase()]);
+  await Promise.all([loadFromSupabase(), loadLinks(), loadJPXTickers(), loadTemplates(), loadTickerStarsFromSupabase(), loadReadLaterFromSupabase()]);
   renderFeed(); renderTickers(); renderTags(); renderCalendar();
 }
 
@@ -1362,9 +1361,36 @@ function loadReadLater() {
   try { readLaterMemos = new Set(JSON.parse(localStorage.getItem(READLATER_KEY) || '[]')); } catch { readLaterMemos = new Set(); }
   try { readDoneMemos  = new Set(JSON.parse(localStorage.getItem(READDONE_KEY)  || '[]')); } catch { readDoneMemos  = new Set(); }
 }
+
+async function loadReadLaterFromSupabase() {
+  // まずlocalStorageから読み込み
+  loadReadLater();
+  // Supabaseから最新を取得
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/memos?id=eq.stocknote_readlater`, { headers: SB_HEADERS });
+    const rows = await res.json();
+    if (rows.length && rows[0].data) {
+      const { later, done } = rows[0].data;
+      readLaterMemos = new Set(later || []);
+      readDoneMemos  = new Set(done  || []);
+      localStorage.setItem(READLATER_KEY, JSON.stringify([...readLaterMemos]));
+      localStorage.setItem(READDONE_KEY,  JSON.stringify([...readDoneMemos]));
+    }
+  } catch {}
+}
+
 function saveReadLater() {
   localStorage.setItem(READLATER_KEY, JSON.stringify([...readLaterMemos]));
   localStorage.setItem(READDONE_KEY,  JSON.stringify([...readDoneMemos]));
+  // Supabaseに非同期で同期
+  (async () => {
+    try {
+      const existing = await fetch(`${SB_URL}/rest/v1/memos?id=eq.stocknote_readlater`, { headers: SB_HEADERS }).then(r => r.json());
+      const payload = { id: 'stocknote_readlater', data: { later: [...readLaterMemos], done: [...readDoneMemos] } };
+      const url = existing.length > 0 ? `${SB_URL}/rest/v1/memos?id=eq.stocknote_readlater` : `${SB_URL}/rest/v1/memos`;
+      await fetch(url, { method: existing.length > 0 ? 'PATCH' : 'POST', headers: SB_HEADERS, body: JSON.stringify(payload) });
+    } catch {}
+  })();
 }
 function toggleReadLater(id, e) {
   e.stopPropagation();
