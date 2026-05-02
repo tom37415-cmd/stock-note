@@ -635,8 +635,12 @@ svg.price-chart{width:100%;overflow:visible;}
       </div>
       <span class="overlay-count" id="ov-ticker-count"></span>
       <button id="ov-feed-link-btn" onclick="openTickerFeed()" title="フィードで絞り込み表示"
-        style="background:rgba(0,153,255,.12);border:1px solid rgba(0,153,255,.35);color:var(--accent2);border-radius:7px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-right:8px;white-space:nowrap;">
+        style="background:rgba(0,153,255,.12);border:1px solid rgba(0,153,255,.35);color:var(--accent2);border-radius:7px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-right:6px;white-space:nowrap;">
         📋 フィードで見る
+      </button>
+      <button id="ov-copy-link-btn" onclick="copyTickerLink()" title="このURLをコピー"
+        style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.35);color:var(--accent);border-radius:7px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-right:8px;white-space:nowrap;">
+        🔗 リンクをコピー
       </button>
       <button class="close-btn" onclick="closeOverlay('ticker-overlay')">✕</button>
     </div>
@@ -947,6 +951,20 @@ async function init() {
   setSyncStatus('syncing');
   await Promise.all([loadFromSupabase(), loadLinks(), loadJPXTickers(), loadTemplates(), loadTickerStarsFromSupabase(), loadReadLaterFromSupabase()]);
   renderFeed(); renderTickers(); renderTags(); renderCalendar();
+
+  // URLパラメーターで銘柄フィルター（?ticker=7203）
+  const params = new URLSearchParams(window.location.search);
+  const tickerParam = params.get('ticker');
+  if (tickerParam) {
+    const code = tickerParam.toUpperCase();
+    _currentTickerFilterCode = code;
+    currentTickerFilter = code;
+    const bar = document.getElementById('ticker-filter-active');
+    const label = document.getElementById('ticker-filter-label');
+    if (bar) bar.style.display = 'flex';
+    if (label) label.textContent = `$${code}${getTickerName(code) ? ' ' + getTickerName(code) : ''} のメモ`;
+    renderFeed();
+  }
 }
 
 function getSampleMemos() {
@@ -1074,6 +1092,18 @@ function setTagFilter(tag) {
   renderFeed(); renderTags();
   showPage('feed', document.querySelector('.nav-btn'));
 }
+function copyTickerLink() {
+  const code = _currentTickerFilterCode;
+  if (!code) return;
+  const url = `${location.origin}${location.pathname}?ticker=${code}`;
+  navigator.clipboard.writeText(url).then(() => {
+    showToast(`🔗 リンクをコピーしました：?ticker=${code}`);
+  }).catch(() => {
+    // clipboardが使えない場合はpromptで表示
+    prompt('このURLをコピーしてください', url);
+  });
+}
+
 function clearTagFilter() { setTagFilter(null); }
 
 // 銘柄フィルター
