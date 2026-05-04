@@ -381,7 +381,7 @@ svg.price-chart{width:100%;overflow:visible;}
 <body>
 
 <header>
-  <div class="logo"><div class="logo-dot"></div>StockNote</div>
+  <div class="logo" onclick="goHome()" style="cursor:pointer;" title="トップに戻る"><div class="logo-dot"></div>StockNote</div>
   <nav>
     <button class="nav-btn active" onclick="showPage('feed',this)">フィード</button>
     <button class="nav-btn" onclick="showPage('calendar',this)">カレンダー</button>
@@ -1092,6 +1092,31 @@ function setTagFilter(tag) {
   renderFeed(); renderTags();
   showPage('feed', document.querySelector('.nav-btn'));
 }
+function goHome() {
+  // フィルターを全クリア
+  currentFilter = 'ALL';
+  currentTagFilter = null;
+  currentTickerFilter = null;
+  _currentTickerFilterCode = null;
+  searchQuery = '';
+  // バナー非表示
+  const tagBar = document.getElementById('tag-filter-active');
+  const tickerBar = document.getElementById('ticker-filter-active');
+  if (tagBar) tagBar.style.display = 'none';
+  if (tickerBar) tickerBar.style.display = 'none';
+  // 検索バークリア
+  const si = document.getElementById('compose-search-input') || document.getElementById('search-input');
+  if (si) si.value = '';
+  // フィルターチップをALLに戻す
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  document.querySelector('.filter-chip')?.classList.add('active');
+  // フィードページへ
+  showPage('feed', document.querySelector('.nav-btn'));
+  // URLパラメーターを消す
+  history.replaceState(null, '', location.pathname);
+  renderFeed();
+}
+
 function copyTickerLink() {
   const code = _currentTickerFilterCode;
   if (!code) return;
