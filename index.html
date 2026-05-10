@@ -1100,6 +1100,11 @@ function setTagFilter(tag) {
   renderFeed(); renderTags();
   showPage('feed', document.querySelector('.nav-btn'));
 }
+function goToTickerPage(code) {
+  const url = `${location.origin}${location.pathname}?ticker=${code}`;
+  location.href = url;
+}
+
 function goHome() {
   // フィルターを全クリア
   currentFilter = 'ALL';
@@ -1623,7 +1628,7 @@ function renderTickers() {
     const starsHtml = [1,2,3,4,5].map(i =>
       `<span class="ticker-star" onclick="setTickerStar('${t}',${i},event)" title="${i}つ星">${i <= star ? '⭐' : '☆'}</span>`
     ).join('');
-    return `<div class="ticker-card" onclick="openTicker('${t}')">
+    return `<div class="ticker-card" onclick="goToTickerPage('${t}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div class="ticker-card-code">$${t}</div>
       </div>
