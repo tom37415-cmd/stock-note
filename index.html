@@ -963,6 +963,9 @@ async function init() {
     const label = document.getElementById('ticker-filter-label');
     if (bar) bar.style.display = 'flex';
     if (label) label.textContent = `$${code}${getTickerName(code) ? ' ' + getTickerName(code) : ''} のメモ`;
+    // 投稿フォームの銘柄欄に自動セット
+    const tickerInput = document.getElementById('compose-tickers');
+    if (tickerInput) tickerInput.value = '$' + code;
     renderFeed();
   }
 }
@@ -1060,7 +1063,12 @@ async function postMemo() {
   memos.sort((a,b)=>b.ts-a.ts);
   save();
   document.getElementById('compose-text').value='';
-  document.getElementById('compose-tickers').value='';
+  // 銘柄フィルター中なら銘柄欄を維持
+  if (currentTickerFilter) {
+    document.getElementById('compose-tickers').value = '$' + currentTickerFilter;
+  } else {
+    document.getElementById('compose-tickers').value='';
+  }
   document.getElementById('price-inputs').style.display='none';
   document.getElementById('price-inputs-row').innerHTML='';
   document.getElementById('schedule-date-row').style.display='none';
