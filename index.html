@@ -341,6 +341,13 @@ svg.price-chart{width:100%;overflow:visible;}
 
 /* ボトムナビはデスクトップでは非表示 */
 .bottom-nav { display: none; }
+/* ピン止め */
+.pin-btn { background:none; border:none; cursor:pointer; font-size:14px; padding:4px 6px; border-radius:5px; transition:.15s; flex-shrink:0; color:var(--text3); }
+.pin-btn:hover { background:rgba(255,200,0,.15); }
+.pin-btn.pinned { color:#f5c842; }
+.pinned-section-label { font-size:11px; color:var(--text3); font-family:monospace; padding:4px 0 8px; letter-spacing:.05em; }
+.memo-card.is-pinned { border-color:rgba(245,200,66,.4); box-shadow:0 0 0 1px rgba(245,200,66,.2); }
+
 /* あとで読む */
 .readlater-btn { background:none; border:none; cursor:pointer; font-size:14px; padding:4px 6px; border-radius:5px; transition:.15s; flex-shrink:0; color:var(--text3); }
 .readlater-btn:hover { background:rgba(245,200,66,.15); }
@@ -949,7 +956,7 @@ function save() { saveToSupabase(); }
 // ===== INIT =====
 async function init() {
   setSyncStatus('syncing');
-  await Promise.all([loadFromSupabase(), loadLinks(), loadJPXTickers(), loadTemplates(), loadTickerStarsFromSupabase(), loadReadLaterFromSupabase()]);
+  await Promise.all([loadFromSupabase(), loadLinks(), loadJPXTickers(), loadTemplates(), loadTickerStarsFromSupabase(), loadReadLaterFromSupabase(), loadPinnedFromSupabase()]);
   renderFeed(); renderTickers(); renderTags(); renderCalendar();
 
   // URLパラメーターで銘柄フィルター（?ticker=7203）
@@ -1197,7 +1204,18 @@ function renderFeed() {
     list.innerHTML = searchBar + '<div class="empty"><span class="empty-icon">📋</span>' + (searchQuery ? '検索結果がありません' : 'まだメモがありません') + '</div>';
     return;
   }
-  list.innerHTML = searchBar + filtered.map(m=>renderCard(m)).join('');
+  // 銘柄個別ページのみピン止めを先頭に
+  if (currentTickerFilter) {
+    const pinned = getPinnedSet(currentTickerFilter);
+    const pinnedList   = filtered.filter(m => pinned.has(m.id));
+    const unpinnedList = filtered.filter(m => !pinned.has(m.id));
+    const pinnedHtml = pinnedList.length
+      ? `<div class="pinned-section-label">📌 ピン止め</div>${pinnedList.map(m=>renderCard(m)).join('')}<div style="border-top:1px solid var(--border);margin:12px 0 10px;"></div>`
+      : '';
+    list.innerHTML = searchBar + pinnedHtml + unpinnedList.map(m=>renderCard(m)).join('');
+  } else {
+    list.innerHTML = searchBar + filtered.map(m=>renderCard(m)).join('');
+  }
   filtered.forEach(m => { if ((m.images||[]).length > 0) loadCardImages(m.id, m.images); });
 }
 
@@ -1231,7 +1249,8 @@ function renderCard(m, pfx='') {
     ? `<div style="font-size:15px;font-weight:700;color:#b47fff;margin-bottom:4px;">📅 ${esc(m.scheduleTitle)}</div>`
     : '';
   const typeLabel = m.type === 'SCHEDULE' ? '📅 予定' : m.type;
-  return `<div class="memo-card ${readDoneMemos.has(m.id)?'read-done':''}" id="card-${pfx}${m.id}">
+  const isPinned = currentTickerFilter && getPinnedSet(currentTickerFilter).has(m.id);
+  return `<div class="memo-card ${readDoneMemos.has(m.id)?'read-done':''} ${isPinned?'is-pinned':''}" id="card-${pfx}${m.id}">
     <div class="memo-meta">
       <span class="memo-type ${m.type}" style="background:${tcBg};color:${tcFg}">${typeLabel}</span>
       <span class="memo-time">${formatTime(m.ts)}</span>
@@ -1255,6 +1274,7 @@ function renderCard(m, pfx='') {
       <button class="action-btn reply" onclick="toggleReply('${pfx}${m.id}')">💬 ツリー${(m.replies||[]).length>0?` (${m.replies.length})`:''}</button>
       <button class="readlater-btn ${readLaterMemos.has(m.id)?'marked':''}" onclick="toggleReadLater('${m.id}',event)" title="あとで読む">🔖</button>
       ${readLaterMemos.has(m.id)?`<button class="read-btn ${readDoneMemos.has(m.id)?'done':''}" onclick="toggleReadDone('${m.id}',event)">${readDoneMemos.has(m.id)?'✅ 既読':'既読にする'}</button>`:''}
+      ${currentTickerFilter?`<button class="pin-btn ${getPinnedSet(currentTickerFilter).has(m.id)?'pinned':''}" onclick="togglePin('${m.id}',event)" title="ピン止め">📌</button>`:''}
       <button class="action-btn edit" onclick="openEditModal('${m.id}')" style="margin-left:auto;">✏️ 編集</button>
       <button class="action-btn del" onclick="deleteMemo('${m.id}')">🗑 削除</button>
     </div>
@@ -1456,6 +1476,60 @@ function closeEditModal() {
   editingId = null;
 }
 function editOverlayBgClose(e) { if(e.target===document.getElementById('edit-overlay')) closeEditModal(); }
+
+// ===== ピン止め =====
+// { tickerCode: Set<memoId> } の形で管理
+let pinnedMemos = {}; // { '7203': ['id1','id2'], ... }
+
+function getPinnedSet(code) {
+  if (!pinnedMemos[code]) pinnedMemos[code] = [];
+  return new Set(pinnedMemos[code]);
+}
+
+async function loadPinnedFromSupabase() {
+  try {
+    const cache = localStorage.getItem('sn_pinned_v1');
+    if (cache) pinnedMemos = JSON.parse(cache);
+  } catch {}
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/memos?id=eq.stocknote_pinned`, { headers: SB_HEADERS });
+    const rows = await res.json();
+    if (rows.length && rows[0].data?.pinned) {
+      pinnedMemos = rows[0].data.pinned;
+      localStorage.setItem('sn_pinned_v1', JSON.stringify(pinnedMemos));
+    }
+  } catch {}
+}
+
+function savePinned() {
+  localStorage.setItem('sn_pinned_v1', JSON.stringify(pinnedMemos));
+  (async () => {
+    try {
+      const existing = await fetch(`${SB_URL}/rest/v1/memos?id=eq.stocknote_pinned`, { headers: SB_HEADERS }).then(r=>r.json());
+      const payload = { id: 'stocknote_pinned', data: { pinned: pinnedMemos } };
+      const url = existing.length > 0 ? `${SB_URL}/rest/v1/memos?id=eq.stocknote_pinned` : `${SB_URL}/rest/v1/memos`;
+      await fetch(url, { method: existing.length > 0 ? 'PATCH' : 'POST', headers: SB_HEADERS, body: JSON.stringify(payload) });
+    } catch {}
+  })();
+}
+
+function togglePin(memoId, e) {
+  e.stopPropagation();
+  const code = currentTickerFilter;
+  if (!code) return;
+  if (!pinnedMemos[code]) pinnedMemos[code] = [];
+  const set = new Set(pinnedMemos[code]);
+  if (set.has(memoId)) {
+    set.delete(memoId);
+    showToast('📌 ピンを外しました');
+  } else {
+    set.add(memoId);
+    showToast('📌 ピン止めしました');
+  }
+  pinnedMemos[code] = [...set];
+  savePinned();
+  renderFeed();
+}
 
 // ===== あとで読む =====
 const READLATER_KEY = 'sn_readlater_v1';
